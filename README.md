@@ -1,14 +1,18 @@
-# 3307 - Compiladores | Proyecto 01
+# Proyecto: HR_Sintetico (PoC RH / TFG)
 
-## Objetivo
-Aplicar los conocimientos adquiridos en el curso, específicamente enfocándonos en la programación relacionada con compiladores y su sintaxis, que se manifiesta en la creación de cadenas de caracteres utilizadas como código fuente, las cuales se emplean como entrada en el programa y deben ser procesadas
+Este repositorio contiene la **fuente de datos transaccional sintética** y el esqueleto Kimball (Staging + Data Mart) para una prueba de concepto de Business Intelligence en Recursos Humanos.
 
-## Software de Desarrollo
-El proyecto debe ser realizado en el lenguaje de programación **Java**, en **modo carácter**. No se debe usar el modo gráfico.
+## Empezar aquí
 
-## Desarrollo
-El proyecto debe tener **independencia del compilador**, esto quiere decir que el programa puede ser ejecutado en cualquier máquina y carpeta.
+Abra la carpeta [`HR_Sintetico/`](./HR_Sintetico/README.md) y siga la guía de instalación.
 
-En este proyecto, se llevará a cabo la lectura de un archivo que contiene fragmentos de código en Visual Basic .NET, con el propósito de realizar un análisis que identifique los tokens o componentes léxicos para verificar su correcto uso según los patrones que los determinan. Además, se detectarán y registrarán los posibles errores en un archivo de salida con extensión .txt
+### Contenido principal
 
-No se permite el uso de librerías de terceros, que son fragmentos de código desarrollados por otras personas y encapsulados en componentes que podrían utilizarse como referencia en la solución del problema a través del código fuente.
+- OLTP sintético (`HR_Sintetico`) con empleados, habilidades, ausencias, salidas y compensación
+- Stored procedures para generar cambios incrementales (pruebas de ETL)
+- Staging Area (`HR_Staging`) y Data Mart dimensional (`HR_DataMart`)
+- Documentación de arquitectura Kimball, SSIS y Power BI
+
+### Stack
+
+Microsoft SQL Server · SSIS · Power BI · metodología Ralph Kimball
