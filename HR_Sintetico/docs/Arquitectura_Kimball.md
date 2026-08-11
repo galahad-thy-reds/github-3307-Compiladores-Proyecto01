@@ -59,20 +59,23 @@
 
 ## 5. Estrategia de carga
 
+La separación detallada **Full vs Incremental** (dimensiones y hechos, Staging → Data Mart) está en [`Guia_SSIS_PowerBI.md`](./Guia_SSIS_PowerBI.md).
+
+Resumen:
+
 ### Carga inicial (Full)
-1. Truncar staging.
-2. Extraer todas las tablas catálogo + transaccionales.
-3. Cargar dimensiones (lookup / insert).
-4. Generar `DimFecha`.
-5. Cargar hechos históricos.
+1. Truncar staging → extraer **todo** el OLTP (`LoadType='Full'`).
+2. Cargar dimensiones (TRUNCATE/INSERT catálogos; `DimEmpleado`).
+3. Truncar hechos → INSERT histórico.
+4. Inicializar watermarks al `MAX(ModifiedAt)`.
 
 ### Carga incremental
-1. Leer `hr.EtlWatermark.UltimoModifiedAt` por tabla.
-2. Extraer `WHERE ModifiedAt > @watermark` (o `usp_ObtenerCambiosDesde`).
-3. Landing en staging con `LoadType = 'Incremental'`.
-4. MERGE dimensiones (SCD1 catálogos / SCD2 empleado).
-5. Insert hechos nuevos (idempotencia por BK de evento).
-6. Actualizar watermark.
+1. Extraer `ModifiedAt > watermark` → staging (`LoadType='Incremental'`).
+2. MERGE dimensiones (SCD1 catálogos / SCD2 empleado).
+3. INSERT hechos nuevos con idempotencia (`NOT EXISTS` / MERGE). **No truncar** hechos.
+4. Avanzar watermarks solo si la corrida fue exitosa.
+
+Prototipo ejecutable: `04_DataMart/03_EtlLoadHelpers.sql` (`stg.usp_RunCargaInicial` / `stg.usp_RunCargaIncremental`).
 
 ## 6. Diagrama lógico
 

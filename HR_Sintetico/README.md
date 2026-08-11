@@ -30,7 +30,8 @@ Ejecute **en este orden**, conectado a su instancia SQL Server:
 6. `03_Procedures/02_VistasAnalisisNegocio.sql`
 7. `04_DataMart/02_CreateStaging.sql`
 8. `04_DataMart/01_CreateDataMart.sql`
-9. (Opcional) `EXEC dm.usp_GenerarDimFecha;` en `HR_DataMart`
+9. `04_DataMart/03_EtlLoadHelpers.sql` (prototipo Full/Incremental en T-SQL)
+10. (Opcional) `EXEC dm.usp_GenerarDimFecha;` en `HR_DataMart` — también lo hace el helper FULL
 
 Bases creadas:
 
@@ -125,7 +126,7 @@ Hechos sugeridos:
 | `FactAusentismo` | Ausentismo y productividad |
 | `FactHeadcountMensual` | Compensación + denominadores de tasas |
 
-Detalle en `docs/Arquitectura_Kimball.md` y `docs/Guia_SSIS_PowerBI.md`.
+Detalle en `docs/Arquitectura_Kimball.md` y `docs/Guia_SSIS_PowerBI.md` (este último separa **carga inicial vs incremental**, con fases OLTP→Staging y Staging→Data Mart para dimensiones y hechos).
 
 ---
 

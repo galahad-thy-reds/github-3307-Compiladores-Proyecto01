@@ -28,8 +28,11 @@ PRINT N'==== 4/6 Procedimientos y vistas ====';
 PRINT N'==== 5/6 Staging ====';
 :r $(ProjectRoot)\04_DataMart\02_CreateStaging.sql
 
-PRINT N'==== 6/6 Data Mart ====';
+PRINT N'==== 6/7 Data Mart ====';
 :r $(ProjectRoot)\04_DataMart\01_CreateDataMart.sql
+
+PRINT N'==== 7/7 ETL Helpers Full/Incremental ====';
+:r $(ProjectRoot)\04_DataMart\03_EtlLoadHelpers.sql
 
 PRINT N'==== Instalación completa ====';
 GO
@@ -37,11 +40,11 @@ GO
 /*
   Si no usa SQLCMD, ejecute manualmente los scripts en el orden indicado.
 
-  Ejemplo post-instalación (simular cambios incrementales):
+  Demo carga inicial + incremental (sin SSIS):
 
-    USE HR_Sintetico;
-    EXEC hr.usp_SimularDiaTransaccional;
-    EXEC hr.usp_ObtenerCambiosDesde @TablaFuente = N'hr.Empleado', @DesdeModifiedAt = '2020-01-01';
+    EXEC HR_Staging.stg.usp_RunCargaInicial;
+    EXEC HR_Sintetico.hr.usp_SimularDiaTransaccional;
+    EXEC HR_Staging.stg.usp_RunCargaIncremental;
 
   Validar preguntas de negocio:
 
