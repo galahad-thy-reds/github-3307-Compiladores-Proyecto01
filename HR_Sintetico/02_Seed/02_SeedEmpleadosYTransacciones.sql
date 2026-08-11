@@ -14,12 +14,18 @@ CREATE OR ALTER PROCEDURE hr.usp_SeedEmpleadosInicial
 AS
 BEGIN
     SET NOCOUNT ON;
+    SET XACT_ABORT ON;
 
     IF EXISTS (SELECT 1 FROM hr.Empleado)
     BEGIN
-        PRINT N'Ya existen empleados. Omitiendo carga inicial. Use usp_ResetDemoData si desea regenerar.';
+        PRINT N'Ya existen empleados. Omitiendo carga inicial.';
+        PRINT N'Si la carga anterior falló a medias, ejecute: EXEC hr.usp_ResetDemoData @Confirmar = 1;';
+        PRINT N'Luego vuelva a ejecutar: EXEC hr.usp_SeedEmpleadosInicial;';
         RETURN;
     END
+
+    BEGIN TRY
+    BEGIN TRANSACTION;
 
     IF OBJECT_ID(N'tempdb..#Nombres') IS NOT NULL DROP TABLE #Nombres;
     IF OBJECT_ID(N'tempdb..#Apellidos') IS NOT NULL DROP TABLE #Apellidos;
@@ -148,10 +154,13 @@ BEGIN
 
         SET @Nacimiento = DATEADD(YEAR, -(22 + ABS(CHECKSUM(NEWID())) % 30), @FechaContrato);
         SET @NumEmp = 'E' + RIGHT('00000' + CAST(@i AS VARCHAR(5)), 5);
-        SET @Cedula = CAST(100000000 + @i * 37 + (ABS(CHECKSUM(NEWID())) % 50) AS VARCHAR(20));
-        SET @Email = LOWER(REPLACE(REPLACE(@Nombre, N'í', 'i'), N'á', 'a')) + '.' +
-                     LOWER(REPLACE(REPLACE(@Ap1, N'í', 'i'), N'á', 'a')) +
-                     CAST(@i AS VARCHAR(10)) + '@hrsintetico.local';
+        /* Cédula determinística y única por empleado (evita colisiones del CHECKSUM aleatorio) */
+        SET @Cedula = CAST(100000000 + @i AS VARCHAR(20));
+        SET @Email = LOWER(
+                        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                            @Nombre + N'.' + @Ap1,
+                            N'á','a'), N'é','e'), N'í','i'), N'ó','o'), N'ú','u'), N'ñ','n'), N'ü','u')
+                    ) + CAST(@i AS VARCHAR(10)) + '@hrsintetico.local';
         SET @TipoContrato = CASE WHEN @i % 11 = 0 THEN 'Temporal' WHEN @i % 17 = 0 THEN 'Servicios' ELSE 'Indefinido' END;
 
         INSERT INTO hr.Empleado
@@ -174,6 +183,8 @@ BEGIN
         );
 
         SET @EmpID = SCOPE_IDENTITY();
+        IF @EmpID IS NULL
+            THROW 50001, N'No se pudo obtener EmpleadoID tras el INSERT.', 1;
 
         INSERT INTO hr.EmpleadoAsignacionHistorial
         (EmpleadoID, DepartamentoID, PuestoID, UbicacionID, ManagerEmpleadoID, EscalaSalarialID,
@@ -481,10 +492,21 @@ BEGIN
     UNION ALL SELECT 'Capacitaciones', COUNT(*) FROM hr.EmpleadoCapacitacion
     UNION ALL SELECT 'Evaluaciones', COUNT(*) FROM hr.EvaluacionDesempeno;
 
+    COMMIT TRANSACTION;
     PRINT N'Carga inicial de empleados y transacciones completada.';
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
 END
 GO
 
-/* Ejecutar seed automáticamente al instalar el script */
+/*
+  Si una ejecución previa falló y dejó empleados parciales:
+
+    EXEC hr.usp_ResetDemoData @Confirmar = 1;
+    EXEC hr.usp_SeedEmpleadosInicial @TotalEmpleados = 180;
+*/
 EXEC hr.usp_SeedEmpleadosInicial @TotalEmpleados = 180;
 GO
