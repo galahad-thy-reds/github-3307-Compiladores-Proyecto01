@@ -396,7 +396,8 @@ BEGIN
         MotivoSalidaID      INT NOT NULL,
         FechaSalida         DATE NOT NULL,
         TipoSalida          VARCHAR(20) NOT NULL, -- Renuncia, Despido, MutuoAcuerdo, Jubilacion, FinContrato
-        AntiguedadAnios     AS (NULL), -- calculado en ETL / vistas
+        -- Antigüedad: no se almacena aquí; se calcula en ETL / vistas
+        -- (hr.vw_RotacionDetalle.AntiguedadMeses, dm.FactRotacion.AntiguedadMeses)
         EntrevistaSalida    BIT NOT NULL CONSTRAINT DF_Salida_Entrevista DEFAULT (0),
         ComentarioSalida    NVARCHAR(500) NULL,
         Recontratable       BIT NOT NULL CONSTRAINT DF_Salida_Recontratable DEFAULT (1),
