@@ -7,7 +7,7 @@
 | Origen OLTP | `HR_Sintetico` | Sistema transaccional sintético (empleados, nómina lógica, ausencias, salidas, skills) |
 | Staging | `HR_Staging` | Copia casi 1:1 del origen + metadatos de carga (`LoadBatchID`, `LoadType`, `SrcModifiedAt`) |
 | Data Mart | `HR_DataMart` | Modelo dimensional en estrella (conformado a preguntas de RH) |
-| Presentación | Power BI | Semántica, KPIs y tableros |
+| Presentación | Power BI | Semántica, KPIs y tableros (ver `docs/Guia_PowerBI_Tableros.md`) |
 
 ## 2. Principios Kimball aplicados
 
@@ -109,3 +109,5 @@ Estos patrones están **intencionalmente** en el seed para que los tableros mues
 4. Diferencias salariales entre Comercial / Operaciones y gap leve de género en TI.
 
 Documente en la memoria que los sesgos son de diseño (datos sintéticos), no conclusiones sobre una empresa real.
+
+Los tableros que deben hacer visibles esos sesgos (páginas, KPIs y DAX mínimo) están en [`Guia_PowerBI_Tableros.md`](./Guia_PowerBI_Tableros.md).

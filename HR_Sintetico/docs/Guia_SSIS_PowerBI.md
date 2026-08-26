@@ -653,48 +653,23 @@ UNION ALL SELECT 'Headcount', COUNT(*) FROM HR_DataMart.dm.FactHeadcountMensual;
 
 Conecte a `HR_DataMart` (Import mode recomendado para PoC).
 
+El diseño de tableros, KPIs, DAX y la decisión de **un solo `.pbix`** están en [`Guia_PowerBI_Tableros.md`](./Guia_PowerBI_Tableros.md). Aquí solo el contrato de modelo.
+
 ### Relaciones
 
-- `DimFecha[FechaKey]` 1→* cada hecho (role-playing: tablas/roles `FechaSalida`, `FechaInicioAusencia` si necesita varias relaciones activas).
-- `DimEmpleado`, `DimDepartamento`, `DimPuesto`, `DimUbicacion` → todos los hechos.
+- `DimFecha[FechaKey]` 1→\* cada hecho. Role-playing: `FactAusentismo[FechaFinKey]` queda **inactiva** (la activa es `FechaInicioKey`).
+- `DimEmpleado`, `DimDepartamento`, `DimPuesto` → los 4 hechos.
+- `DimUbicacion` → solo `FactHeadcountMensual` y `FactRotacion` (el mart no lleva ubicación en ausentismo ni skills).
 - `DimMotivoSalida` → `FactRotacion`
 - `DimTipoAusencia` → `FactAusentismo`
 - `DimHabilidad` → `FactHabilidadEmpleado`
 - `DimEscalaSalarial` → `FactHeadcountMensual`
 
-### Medidas DAX sugeridas
+`FactHeadcountMensual` es grano empleado×mes: **no** use `SUM(EsActivo)` como denominador anual de rotación. Use el promedio de headcount mensual (`AVERAGEX` sobre `AnioMes`). Detalle y medidas en la guía de tableros.
 
-```dax
-Salidas = SUM(FactRotacion[ContadorSalida])
+### Páginas de informe
 
-Headcount =
-CALCULATE(
-    SUM(FactHeadcountMensual[EsActivo]),
-    FactHeadcountMensual[EsActivo] = TRUE()
-)
-
-Tasa Rotación % = DIVIDE([Salidas], [Headcount])
-
-Días Ausencia = SUM(FactAusentismo[DiasLaborales])
-
-Días Impacto Productividad =
-CALCULATE([Días Ausencia], DimTipoAusencia[AfectaProductividad] = TRUE())
-
-% Gaps Habilidad =
-DIVIDE(SUM(FactHabilidadEmpleado[TieneGap]), COUNTROWS(FactHabilidadEmpleado))
-
-Gaps Críticos =
-CALCULATE(SUM(FactHabilidadEmpleado[TieneGap]), DimHabilidad[IsCritical] = TRUE())
-
-Salario Promedio = AVERAGE(FactHeadcountMensual[Salario])
-```
-
-### Páginas de informe sugeridas
-
-1. **Talento / Skills** — % gap por depto, matriz puesto×habilidad, críticos vs no críticos.  
-2. **Rotación** — tendencia mensual, motivos, antigüedad al salir, evitables vs no.  
-3. **Ausentismo** — heatmap mes×depto, tipos que afectan productividad.  
-4. **Compensación** — salario por depto/nivel, posición en banda, gap de género.
+Un archivo `HR_TableroMando.pbix`: Ejecutivo + Talento + Rotación + Ausentismo + Compensación.
 
 ### Prototipo temporal (solo exploración)
 
