@@ -72,3 +72,5 @@ Puesto ── PuestoHabilidadRequerida ── Habilidad
 | Evaluaciones | ~2 ciclos × 2 años |
 
 La volumetría es deliberadamente manejable para una PoC académica, pero suficiente para ETLs, SCD y tableros.
+
+Para el detalle columna por columna de OLTP y Data Mart, ver [`Diccionario_Datos.md`](./Diccionario_Datos.md).

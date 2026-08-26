@@ -14,7 +14,7 @@ Stack objetivo: **SQL Server 2025**, **SSIS**, **Power BI**, metodología **Ralp
 | `02_Seed/` | Catálogos + ~180 empleados con historial, ausencias, salidas, habilidades |
 | `03_Procedures/` | SPs para generar cambios incrementales + vistas de negocio |
 | `04_DataMart/` | `HR_Staging` + `HR_DataMart` (modelo estrella Kimball) |
-| `docs/` | Arquitectura, mapeo a preguntas de negocio y guía SSIS/Power BI |
+| `docs/` | Arquitectura, diccionario de datos, guía SSIS/Power BI y validaciones |
 
 ---
 
