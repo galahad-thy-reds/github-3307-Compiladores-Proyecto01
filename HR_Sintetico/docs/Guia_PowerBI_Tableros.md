@@ -73,66 +73,311 @@ Oculte en el panel de datos: `*Key`, `*BK`, `*ID` de hechos, `HashDiff`, `FechaI
 
 **No** ponga `DimEmpleado[EsActual] = 1` como filtro de informe. Los hechos históricos apuntan a la versión SCD2 vigente *en el evento*; filtrar “solo actual” borra salidas y ausencias de empleados que ya no están.
 
-### 2.3 Columnas de apoyo (sí) vs medidas (solo tasas y filtros)
+### 2.3 Columnas que usan los tableros
 
-El mart ya trae medidas aditivas (`ContadorSalida`, `DiasLaborales`, `TieneGap`, `EsEvitable`, `AfectaProductividad`). **No las reescriba en DAX.**
+Dos capas:
 
-Use **columna calculada** (o Power Query, preferible) cuando el valor se usa como *eje, leyenda o slicer*. Use **medida** cuando el valor es un agregado o un ratio.
+1. **Nativas del mart** — se usan tal cual (eje, slicer, tooltip o filtro). No les cree una medida `SUM`/`AVERAGE` envolvente: el agregado vive en `_Medidas` (§3).
+2. **Calculadas** — solo cuando el valor es una *etiqueta o bucket* (eje, leyenda, slicer u orden). Bit y códigos (`M`/`F`, `IsCritical`) no se arrastran a un visual de negocio.
 
-| Columna | Tabla | Para qué |
-|---------|-------|----------|
-| `GeneroDesc` | `DimEmpleado` | `M`/`F`/`O` → Femenino / Masculino / Otro |
-| `RangoAntiguedad` | `FactRotacion` y `FactHeadcountMensual` | Eje: 0–6 m, 6–12 m, 1–2 a, 2–4 a, 4+ a (misma lógica que `hr.vw_RotacionDetalle`) |
-| `EstadoBanda` | `FactHeadcountMensual` | Bajo / Dentro / Sobre banda (`RELATED` a `DimEscalaSalarial`) |
-| `PosicionEnBandaPct` | `FactHeadcountMensual` | Columna para histograma; la medida de promedio es aparte |
-| `CriticaDesc` | `DimHabilidad` | Crítica / No crítica (evita filtrar bits en la UI) |
-| `EvitableDesc` | `DimMotivoSalida` | Evitable / No evitable |
-| `ImpactoProdDesc` | `DimTipoAusencia` | Afecta productividad / No afecta |
+Cree las calculadas en DAX (vista Informe → Nueva columna) o en Power Query; DAX es más fácil de citar en la memoria. Después de crearlas, configure **Ordenar por columna** (§2.3.3) y oculte las columnas de orden y las claves (§2.2).
+
+Los agregados y tasas **no** van aquí: van a `_Medidas` (§3).
+
+#### 2.3.1 Columnas nativas (sin expresión)
+
+| Tabla | Columna | Rol en el informe | Páginas |
+|-------|---------|-------------------|---------|
+| `DimFecha` | `Anio` | Slicer global (no el día) | Ejecutivo, Rotación, Ausentismo, Compensación |
+| `DimFecha` | `Mes` | Orden de `NombreMes` (ocultar) | Ausentismo, todas las que muestren mes |
+| `DimFecha` | `NombreMes` | Eje / columnas del heatmap | Ausentismo |
+| `DimFecha` | `AnioMes` | Eje de series (`yyyy-MM`, ya ordena bien) | Ejecutivo, Rotación, Ausentismo |
+| `DimFecha` | `DiaSemana` | Orden de `NombreDiaSemana` (ocultar) | Ausentismo |
+| `DimFecha` | `NombreDiaSemana` | Eje de patrón semanal | Ausentismo |
+| `DimDepartamento` | `Nombre` | Eje y slicer de área | Todas |
+| `DimPuesto` | `Nombre` | Filas de matriz de skills; drill-through | Talento |
+| `DimPuesto` | `FamiliaPuesto` | Slicer global | Todas salvo Talento (opcional ahí) |
+| `DimPuesto` | `NivelJerarquico` | Eje X de dispersión salarial; orden de la desc. | Compensación; slicer global |
+| `DimUbicacion` | `Nombre` | Slicer **local** (no hay FK en Ausentismo ni Talento) | Rotación, Compensación |
+| `DimHabilidad` | `Nombre` | Eje / columnas de matriz | Talento |
+| `DimHabilidad` | `Categoria` | Slicer (Técnica, Blandas, Idioma…) | Talento |
+| `DimHabilidad` | `IsCritical` | Solo filtro interno de medidas; no slicer | — |
+| `DimMotivoSalida` | `Nombre` | Leyenda / filas de tabla | Rotación |
+| `DimMotivoSalida` | `Categoria` | Anillo Voluntaria / Involuntaria | Ejecutivo, Rotación |
+| `DimMotivoSalida` | `EsEvitable` | Solo filtro interno de medidas | — |
+| `DimTipoAusencia` | `Nombre` | Leyenda y eje de tipos | Ausentismo |
+| `DimTipoAusencia` | `AfectaProductividad` | Solo filtro interno de medidas | — |
+| `DimEscalaSalarial` | `Codigo` | Eje G1–G5 | Compensación |
+| `DimEscalaSalarial` | `Grado` | Orden de `Codigo` (ocultar si no se usa) | Compensación |
+| `DimEscalaSalarial` | `SalarioMinimo`, `SalarioMedio`, `SalarioMaximo` | Líneas de política de banda (vía medidas §3) | Compensación |
+| `DimEmpleado` | `Genero` | Solo filtro interno de `[Gap género %]` | — |
+| `DimEmpleado` | `NombreCompleto`, `NumeroEmpleado` | Drill-through nominativo; **nunca** en Ejecutivo | Talento / Rotación (página detalle) |
+| `FactRotacion` | `ContadorSalida` | Fuente de `[Salidas]`; no arrastrar al visual | — |
+| `FactRotacion` | `AntiguedadMeses` | Fuente de `[Antigüedad media al salir]` | — |
+| `FactRotacion` | `SalarioAlSalir` | Fuente de `[Salario al salir promedio]` | — |
+| `FactAusentismo` | `DiasLaborales` | Fuente de `[Días ausencia]` | — |
+| `FactAusentismo` | `ContadorEvento` | Fuente de `[Eventos ausencia]` | — |
+| `FactHabilidadEmpleado` | `NivelActual`, `NivelRequerido` | Fuente de promedios; tooltip del drill-through | Talento |
+| `FactHabilidadEmpleado` | `DiferenciaNiveles` | Fuente de `[Diferencia de niveles promedio]` | Talento (detalle) |
+| `FactHabilidadEmpleado` | `TieneGap` | Fuente de `[Gaps]`; no slicer (use `GapDesc`) | — |
+| `FactHeadcountMensual` | `EsActivo` | Filtro de visuals de plantilla/salario, no del informe | Compensación, denominadores |
+| `FactHeadcountMensual` | `Salario` | Fuente de medidas salariales; eje Y de la **dispersión** (grano fila) | Compensación |
+
+No cree columnas calculadas que solo copien un nativo (`DepartamentoNombre = RELATED(...)`). El modelo en estrella ya resuelve eso.
+
+#### 2.3.2 Columnas calculadas (expresiones)
+
+Cree **en este orden**: primero las de dimensión (no dependen de hechos), luego `PosicionEnBandaPct` y `EstadoBanda` (usan `RELATED`), luego buckets y órdenes.
+
+**`DimEmpleado[GeneroDesc]`** — matriz de equidad y slicer de Compensación.
 
 ```dax
--- Columna en DimEmpleado
 GeneroDesc =
-SWITCH(
+SWITCH (
     DimEmpleado[Genero],
     "F", "Femenino",
     "M", "Masculino",
     "Otro"
 )
+```
 
--- Columna en FactRotacion (igual en FactHeadcountMensual con [AntiguedadMeses])
+**`DimPuesto[NivelJerarquicoDesc]`** — slicer global y eje de equidad (el número 1–5 no se lee solo). Ordenar por `NivelJerarquico`.
+
+```dax
+NivelJerarquicoDesc =
+SWITCH (
+    DimPuesto[NivelJerarquico],
+    1, "1 · Operativo",
+    2, "2 · Analista / especialista",
+    3, "3 · Senior / supervisor",
+    4, "4 · Jefatura",
+    5, "5 · Dirección",
+    "Sin nivel"
+)
+```
+
+**`DimHabilidad[CriticaDesc]`** — leyenda y slicer de Talento.
+
+```dax
+CriticaDesc =
+IF ( DimHabilidad[IsCritical], "Crítica", "No crítica" )
+```
+
+**`DimMotivoSalida[EvitableDesc]`** — anillo/barras de Rotación.
+
+```dax
+EvitableDesc =
+IF ( DimMotivoSalida[EsEvitable], "Evitable", "No evitable" )
+```
+
+**`DimTipoAusencia[ImpactoProdDesc]`** — color de barras de Ausentismo.
+
+```dax
+ImpactoProdDesc =
+IF ( DimTipoAusencia[AfectaProductividad], "Afecta productividad", "No afecta productividad" )
+```
+
+**`DimTipoAusencia[EsRemuneradaDesc]`** — slicer opcional de Ausentismo (el catálogo lo trae; no requiere DAX de medida).
+
+```dax
+EsRemuneradaDesc =
+IF ( DimTipoAusencia[EsRemunerada], "Remunerada", "No remunerada" )
+```
+
+**`FactHabilidadEmpleado[EsObligatoriaDesc]`** y **`GapDesc`** — slicers de Talento.
+
+```dax
+EsObligatoriaDesc =
+IF ( FactHabilidadEmpleado[EsObligatoria], "Obligatoria", "Deseable" )
+
+GapDesc =
+IF ( FactHabilidadEmpleado[TieneGap], "Con gap", "Sin gap" )
+```
+
+**`FactHabilidadEmpleado[NivelActualDesc]`** y **`NivelRequeridoDesc`** — tabla de drill-through (N1–N5 del seed). `NivelActual` nulo = no evaluado.
+
+```dax
+NivelActualDesc =
+SWITCH (
+    FactHabilidadEmpleado[NivelActual],
+    1, "1 · Básico",
+    2, "2 · Intermedio",
+    3, "3 · Avanzado",
+    4, "4 · Experto",
+    5, "5 · Maestro",
+    "Sin evaluación"
+)
+
+NivelRequeridoDesc =
+SWITCH (
+    FactHabilidadEmpleado[NivelRequerido],
+    1, "1 · Básico",
+    2, "2 · Intermedio",
+    3, "3 · Avanzado",
+    4, "4 · Experto",
+    5, "5 · Maestro"
+)
+```
+
+**`RangoAntiguedad` + `RangoAntiguedadOrden`** — misma lógica que `hr.vw_RotacionDetalle`. Créelas en **las dos** tablas de hechos que tienen `AntiguedadMeses` (el histograma de Rotación usa la de `FactRotacion`; un slicer de plantilla usaría la de `FactHeadcountMensual`).
+
+```dax
+-- En FactRotacion
 RangoAntiguedad =
-VAR m = FactRotacion[AntiguedadMeses]
+VAR Meses = FactRotacion[AntiguedadMeses]
 RETURN
-    SWITCH(
-        TRUE(),
-        m < 6, "0-6 meses",
-        m < 12, "6-12 meses",
-        m < 24, "1-2 años",
-        m < 48, "2-4 años",
+    SWITCH (
+        TRUE (),
+        Meses < 6, "0-6 meses",
+        Meses < 12, "6-12 meses",
+        Meses < 24, "1-2 años",
+        Meses < 48, "2-4 años",
         "4+ años"
     )
 
--- Columnas en FactHeadcountMensual
-PosicionEnBandaPct =
-DIVIDE(
-    FactHeadcountMensual[Salario] - RELATED(DimEscalaSalarial[SalarioMinimo]),
-    RELATED(DimEscalaSalarial[SalarioMaximo]) - RELATED(DimEscalaSalarial[SalarioMinimo])
-)
-
-EstadoBanda =
-VAR s = FactHeadcountMensual[Salario]
-VAR mn = RELATED(DimEscalaSalarial[SalarioMinimo])
-VAR mx = RELATED(DimEscalaSalarial[SalarioMaximo])
+RangoAntiguedadOrden =
+VAR Meses = FactRotacion[AntiguedadMeses]
 RETURN
-    SWITCH(
-        TRUE(),
-        s < mn, "Bajo banda",
-        s > mx, "Sobre banda",
-        "Dentro de banda"
+    SWITCH (
+        TRUE (),
+        Meses < 6, 1,
+        Meses < 12, 2,
+        Meses < 24, 3,
+        Meses < 48, 4,
+        5
     )
 ```
 
-Ordene `RangoAntiguedad` y `NombreMes` con una columna numérica oculta (`Mes`, o un `RangoAntiguedadOrden` 1–5).
+```dax
+-- En FactHeadcountMensual (idéntico, cambiando la tabla)
+RangoAntiguedad =
+VAR Meses = FactHeadcountMensual[AntiguedadMeses]
+RETURN
+    SWITCH (
+        TRUE (),
+        Meses < 6, "0-6 meses",
+        Meses < 12, "6-12 meses",
+        Meses < 24, "1-2 años",
+        Meses < 48, "2-4 años",
+        "4+ años"
+    )
+
+RangoAntiguedadOrden =
+VAR Meses = FactHeadcountMensual[AntiguedadMeses]
+RETURN
+    SWITCH (
+        TRUE (),
+        Meses < 6, 1,
+        Meses < 12, 2,
+        Meses < 24, 3,
+        Meses < 48, 4,
+        5
+    )
+```
+
+Oculte `RangoAntiguedadOrden`. En cada tabla: `RangoAntiguedad` → Ordenar por → `RangoAntiguedadOrden`.
+
+**`FactHeadcountMensual[PosicionEnBandaPct]`** — decimal 0–1 (formatear como %). Base del histograma y de `[Posición en banda promedio]`.
+
+```dax
+PosicionEnBandaPct =
+DIVIDE (
+    FactHeadcountMensual[Salario] - RELATED ( DimEscalaSalarial[SalarioMinimo] ),
+    RELATED ( DimEscalaSalarial[SalarioMaximo] ) - RELATED ( DimEscalaSalarial[SalarioMinimo] )
+)
+```
+
+**`FactHeadcountMensual[EstadoBanda]`** + **`EstadoBandaOrden`** — leyenda 100 % apilada y filtro de `[% bajo banda]`.
+
+```dax
+EstadoBanda =
+VAR Salario = FactHeadcountMensual[Salario]
+VAR Minimo = RELATED ( DimEscalaSalarial[SalarioMinimo] )
+VAR Maximo = RELATED ( DimEscalaSalarial[SalarioMaximo] )
+RETURN
+    SWITCH (
+        TRUE (),
+        Salario < Minimo, "Bajo banda",
+        Salario > Maximo, "Sobre banda",
+        "Dentro de banda"
+    )
+
+EstadoBandaOrden =
+SWITCH (
+    FactHeadcountMensual[EstadoBanda],
+    "Bajo banda", 1,
+    "Dentro de banda", 2,
+    "Sobre banda", 3,
+    0
+)
+```
+
+**`FactHeadcountMensual[PosicionEnBandaBucket]`** + **`PosicionEnBandaBucketOrden`** — eje del histograma (el visual de columnas no agrupa bien un % continuo).
+
+```dax
+PosicionEnBandaBucket =
+VAR Pct = FactHeadcountMensual[PosicionEnBandaPct]
+RETURN
+    SWITCH (
+        TRUE (),
+        ISBLANK ( Pct ), "Sin banda",
+        Pct < 0, "< 0% (bajo banda)",
+        Pct < 0.20, "0-20%",
+        Pct < 0.40, "20-40%",
+        Pct < 0.60, "40-60%",
+        Pct < 0.80, "60-80%",
+        Pct <= 1, "80-100%",
+        "> 100% (sobre banda)"
+    )
+
+PosicionEnBandaBucketOrden =
+VAR Pct = FactHeadcountMensual[PosicionEnBandaPct]
+RETURN
+    SWITCH (
+        TRUE (),
+        ISBLANK ( Pct ), 0,
+        Pct < 0, 1,
+        Pct < 0.20, 2,
+        Pct < 0.40, 3,
+        Pct < 0.60, 4,
+        Pct < 0.80, 5,
+        Pct <= 1, 6,
+        7
+    )
+```
+
+#### 2.3.3 Ordenar por columna
+
+| Columna visible | Tabla | Ordenar por | Ocultar la de orden |
+|-----------------|-------|-------------|---------------------|
+| `NombreMes` | `DimFecha` | `Mes` | `Mes` sí (si no se usa de otro modo) |
+| `NombreDiaSemana` | `DimFecha` | `DiaSemana` | `DiaSemana` sí |
+| `NombreTrimestre` | `DimFecha` | `Trimestre` | solo si la usa |
+| `NivelJerarquicoDesc` | `DimPuesto` | `NivelJerarquico` | no |
+| `Codigo` (G1–G5) | `DimEscalaSalarial` | `Grado` | no |
+| `RangoAntiguedad` | `FactRotacion` y `FactHeadcountMensual` | `RangoAntiguedadOrden` | sí |
+| `EstadoBanda` | `FactHeadcountMensual` | `EstadoBandaOrden` | sí |
+| `PosicionEnBandaBucket` | `FactHeadcountMensual` | `PosicionEnBandaBucketOrden` | sí |
+| `NivelActualDesc` / `NivelRequeridoDesc` | `FactHabilidadEmpleado` | `NivelActual` / `NivelRequerido` | no |
+
+`AnioMes` (`yyyy-MM`) no necesita columna de orden.
+
+#### 2.3.4 Dónde se usa cada calculada
+
+| Columna | Visual / slicer | Página |
+|---------|-----------------|--------|
+| `GeneroDesc` | Columnas de la matriz depto × género | Compensación |
+| `NivelJerarquicoDesc` | Slicer global; filas de matriz de equidad | Todas (slicer); Compensación |
+| `CriticaDesc` | Leyenda de columnas de gaps; slicer | Talento |
+| `EvitableDesc` | Anillo o barras evitables | Rotación |
+| `ImpactoProdDesc` | Color de barras por tipo | Ausentismo |
+| `EsRemuneradaDesc` | Slicer opcional | Ausentismo |
+| `EsObligatoriaDesc`, `GapDesc` | Slicers | Talento |
+| `NivelActualDesc`, `NivelRequeridoDesc` | Tabla drill-through | Talento (detalle) |
+| `FactRotacion[RangoAntiguedad]` | Histograma de salidas | Rotación |
+| `EstadoBanda` | Leyenda 100 % apilada | Compensación |
+| `PosicionEnBandaPct` | No va al eje (es continuo); alimenta el bucket y la medida | Compensación |
+| `PosicionEnBandaBucket` | Eje del histograma | Compensación |
 
 ### 2.4 Filtros sincronizados
 
@@ -152,51 +397,171 @@ No diseñe KPIs de **capacitaciones**, **evaluaciones de desempeño** ni **histo
 
 ---
 
-## 3. Medidas DAX (núcleo corto)
+## 3. Tabla `_Medidas`
 
-Ponga todas las medidas en una tabla de medidas (`_Medidas`) para no mezclarlas con columnas de hechos.
+Todas las medidas del `.pbix` viven en **una sola tabla** `_Medidas`. Los hechos no deben mostrar medidas sueltas en el panel: el estudiante (y el jurado) ven un único catálogo.
 
-### 3.1 Aditivos (casi sin DAX)
+Cree primero la tabla, luego las medidas **en el orden de las carpetas** (las tasas llaman a las aditivas). El §4 no introduce DAX nuevo: solo cita estos nombres.
+
+### 3.1 Cómo crear la tabla
+
+1. Inicio → **Especificar datos** (Enter data).
+2. Nombre de tabla: `_Medidas`. Una columna `_` con el valor `0`. Cargar.
+3. En Vista de modelo: clic derecho en `_` → **Ocultar**.
+4. Clic derecho en `_Medidas` → **Nueva medida** (no “nueva columna”).
+5. Tras crear cada medida: Vista de modelo → panel Propiedades → **Carpeta para mostrar** (valores exactos de §3.2) → **Formato**.
+6. No oculte la tabla `_Medidas`: es el punto de entrada del modelo.
+
+No cree una medida por departamento, por tipo de ausencia ni por mes. El eje o el slicer de la dimensión ya recorta el contexto.
+
+### 3.2 Catálogo
+
+| # | Medida | Carpeta | Formato | Qué es |
+|---|--------|---------|---------|--------|
+| 1 | `Días laborables mes` | 00 Auxiliar | Entero | Constante 22; hipótesis de la tasa de ausentismo |
+| 2 | `Ultimo AnioMes` | 00 Auxiliar | Texto | Último `yyyy-MM` con headcount activo en el filtro |
+| 3 | `Headcount mes` | 01 Headcount | Entero | Activos del contexto; a grano año es la **suma** de snapshots |
+| 4 | `Headcount promedio` | 01 Headcount | Entero (1 dec. opcional) | Promedio de `[Headcount mes]` por `AnioMes` |
+| 5 | `Headcount actual` | 01 Headcount | Entero | `[Headcount mes]` del `[Ultimo AnioMes]` |
+| 6 | `Salidas` | 02 Rotación | Entero | `SUM ( ContadorSalida )` |
+| 7 | `Salidas evitables` | 02 Rotación | Entero | Salidas con `EsEvitable` |
+| 8 | `Tasa rotación %` | 02 Rotación | % 1 dec. | `[Salidas] / [Headcount promedio]` |
+| 9 | `% salidas evitables` | 02 Rotación | % 1 dec. | `[Salidas evitables] / [Salidas]` |
+| 10 | `Antigüedad media al salir` | 02 Rotación | Decimal 1 | Meses al salir |
+| 11 | `Salario al salir promedio` | 02 Rotación | CRC | CRC al momento de la baja |
+| 12 | `Eventos ausencia` | 03 Ausentismo | Entero | `SUM ( ContadorEvento )` |
+| 13 | `Días ausencia` | 03 Ausentismo | Decimal 1 | `SUM ( DiasLaborales )` |
+| 14 | `Días impacto productividad` | 03 Ausentismo | Decimal 1 | Días con `AfectaProductividad` |
+| 15 | `Tasa ausentismo %` | 03 Ausentismo | % 1 dec. | Días / (HC promedio × 22) |
+| 16 | `% días con impacto productividad` | 03 Ausentismo | % 1 dec. | Impacto / días |
+| 17 | `Requisitos skill` | 04 Talento | Entero | Filas empleado × skill requerida |
+| 18 | `Requisitos críticos` | 04 Talento | Entero | Requisitos con `IsCritical` |
+| 19 | `Gaps` | 04 Talento | Entero | `SUM ( TieneGap )` |
+| 20 | `Gaps críticos` | 04 Talento | Entero | Gaps en skills críticas |
+| 21 | `% gaps` | 04 Talento | % 1 dec. | Gaps / requisitos |
+| 22 | `% gaps críticos` | 04 Talento | % 1 dec. | Gaps críticos / requisitos críticos |
+| 23 | `% gaps (perfil actual)` | 04 Talento | % 1 dec. | `[% gaps]` ignorando `DimFecha` |
+| 24 | `Nivel actual promedio` | 04 Talento | Decimal 1 | 1–5; ignora no evaluados |
+| 25 | `Nivel requerido promedio` | 04 Talento | Decimal 1 | 1–5 del puesto |
+| 26 | `Diferencia de niveles promedio` | 04 Talento | Decimal 1 | Requerido − actual |
+| 27 | `Salario promedio` | 05 Compensación | CRC | `AVERAGE ( Salario )` en el filtro |
+| 28 | `Salario promedio actual` | 05 Compensación | CRC | Promedio del último mes del filtro |
+| 29 | `Salario mín` | 05 Compensación | CRC | Mínimo de la práctica |
+| 30 | `Salario máx` | 05 Compensación | CRC | Máximo de la práctica |
+| 31 | `Masa salarial mes` | 05 Compensación | CRC | Suma de salarios activos del contexto |
+| 32 | `Masa salarial promedio` | 05 Compensación | CRC | Promedio de masas mensuales |
+| 33 | `Masa salarial actual` | 05 Compensación | CRC | Masa del último mes |
+| 34 | `Gap género %` | 05 Compensación | % 1 dec. | (Prom M − Prom F) / Prom M |
+| 35 | `Gap género % actual` | 05 Compensación | % 1 dec. | Igual, sobre `[Salario promedio actual]` |
+| 36 | `Posición en banda promedio` | 05 Compensación | % 1 dec. | Media de `PosicionEnBandaPct` |
+| 37 | `% bajo banda` | 05 Compensación | % 1 dec. | Headcount bajo banda / headcount |
+| 38 | `% sobre banda` | 05 Compensación | % 1 dec. | Análogo |
+| 39 | `% bajo banda actual` | 05 Compensación | % 1 dec. | `[% bajo banda]` del último mes |
+| 40 | `Banda mínima` | 05 Compensación | CRC | `MIN ( SalarioMinimo )` de la política |
+| 41 | `Banda media` | 05 Compensación | CRC | `MIN ( SalarioMedio )` (constante por grado) |
+| 42 | `Banda máxima` | 05 Compensación | CRC | `MIN ( SalarioMaximo )` |
+
+Las 1–5 y 17–18, 31 son **de apoyo**: el usuario las ve en tooltips o las usan otras medidas. No clone variantes por depto.
+
+### 3.3 Dónde se usa cada medida
+
+Leyenda: T = tarjeta / KPI, V = visual (eje de valor), N = tooltip o título, — = no se arrastra (solo la consumen otras medidas).
+
+#### Ejecutivo (§4.1)
+
+| Visual | Medidas de `_Medidas` | Columnas (§2.3) |
+|--------|----------------------|-----------------|
+| Tarjeta plantilla | `[Headcount promedio]` | — |
+| Tarjeta rotación | `[Tasa rotación %]` | — |
+| Tarjeta ausentismo | `[Tasa ausentismo %]` | — |
+| Tarjeta talento | `[% gaps críticos]` | — |
+| Línea de tasas | `[Tasa rotación %]`, `[Tasa ausentismo %]` | `DimFecha[AnioMes]` |
+| Barras agrupadas depto | `[% gaps]`, `[Tasa rotación %]` | `DimDepartamento[Nombre]` |
+| Anillo categoría de salida | `[Salidas]` | `DimMotivoSalida[Categoria]` |
+| Barras salario | `[Salario promedio]` | `DimDepartamento[Nombre]` |
+
+Slicers de página: `DimFecha[Anio]`, `DimFecha[NombreMes]`, `DimDepartamento[Nombre]`, `DimPuesto[FamiliaPuesto]`, `DimPuesto[NivelJerarquicoDesc]`.
+
+#### Talento (§4.2)
+
+| Visual | Medidas de `_Medidas` | Columnas (§2.3) |
+|--------|----------------------|-----------------|
+| Tarjeta cobertura | `[% gaps]` o `[% gaps (perfil actual)]` | — |
+| Tarjeta + KPI críticos | `[Gaps críticos]`, `[% gaps críticos]` | — |
+| Tarjeta contexto | `[Requisitos skill]` | — |
+| Barras horizontales | `[% gaps]`, `[% gaps críticos]` o `[Gaps críticos]` | `DimDepartamento[Nombre]` |
+| Matriz puesto × skill | `[% gaps]`, `[Nivel actual promedio]`, `[Nivel requerido promedio]` | `DimPuesto[Nombre]`, `DimHabilidad[Nombre]` |
+| Columnas apiladas | `[Gaps]` | `DimHabilidad[Nombre]`, `CriticaDesc` |
+| Dispersión | `[Nivel requerido promedio]` (X), `[Nivel actual promedio]` (Y), `[Requisitos skill]` (tamaño) | `DimHabilidad[Nombre]` (detalle) |
+| Slicers | — | `DimHabilidad[Categoria]`, `CriticaDesc`, `EsObligatoriaDesc`, `GapDesc` |
+| Drill-through | `[Diferencia de niveles promedio]` | `DimPuesto[Nombre]`, `DimHabilidad[Nombre]`, `NivelActualDesc`, `NivelRequeridoDesc` |
+
+En esta página use `[% gaps (perfil actual)]` en las **tarjetas** si el slicer de fecha del informe está sincronizado. En matrices y barras, `[% gaps]` basta si desactivó la sincronización de fecha (§2.4).
+
+#### Rotación (§4.3)
+
+| Visual | Medidas de `_Medidas` | Columnas (§2.3) |
+|--------|----------------------|-----------------|
+| Tarjetas | `[Salidas]`, `[Tasa rotación %]`, `[% salidas evitables]`, `[Antigüedad media al salir]` | — |
+| Columnas + línea | `[Salidas]`, `[Tasa rotación %]` | `DimFecha[AnioMes]` |
+| Barras apiladas | `[Salidas]` | `DimDepartamento[Nombre]`, `DimMotivoSalida[Nombre]` (o `Categoria`) |
+| Anillo / barras | `[Salidas]` | `EvitableDesc` |
+| Histograma | `[Salidas]` | `FactRotacion[RangoAntiguedad]` |
+| Columnas por motivo | `[Antigüedad media al salir]`, `[Salario al salir promedio]` | `DimMotivoSalida[Nombre]` |
+| Tabla | `[Salidas]` (+ % del total **del visual**) | `Nombre`, `Categoria`, `EvitableDesc` |
+| Barras de sede (opcional) | `[Salidas]` | `DimUbicacion[Nombre]` |
+
+`[Salidas evitables]` no hace falta en un visual: ya está en `[% salidas evitables]`. Puede dejarla en tooltip de la tarjeta.
+
+#### Ausentismo (§4.4)
+
+| Visual | Medidas de `_Medidas` | Columnas (§2.3) |
+|--------|----------------------|-----------------|
+| Tarjetas | `[Días ausencia]`, `[Eventos ausencia]`, `[Tasa ausentismo %]`, `[% días con impacto productividad]` | — |
+| Heatmap | `[Días ausencia]` | `DimDepartamento[Nombre]` × `DimFecha[NombreMes]` |
+| Columnas apiladas | `[Días ausencia]` | `DimFecha[NombreMes]`, `DimTipoAusencia[Nombre]` |
+| Barras por tipo | `[Días ausencia]` | `DimTipoAusencia[Nombre]`, color `ImpactoProdDesc` |
+| Línea | `[Tasa ausentismo %]` | `DimFecha[AnioMes]` |
+| Columnas weekday | `[Días ausencia]` | `DimFecha[NombreDiaSemana]` |
+| Slicer opcional | — | `EsRemuneradaDesc` |
+
+Para “solo enfermedad”: filtre el visual con `DimTipoAusencia[Nombre] = "Incapacidad por enfermedad"`. No cree `[Días enfermedad]`. `[Días impacto productividad]` puede ir de tooltip en la tarjeta de `% días con impacto`. `[Días laborables mes]` no se arrastra: solo documenta el 22.
+
+#### Compensación (§4.5)
+
+| Visual | Medidas de `_Medidas` | Columnas (§2.3) |
+|--------|----------------------|-----------------|
+| Tarjetas (foto) | `[Salario promedio actual]`, `[Masa salarial actual]`, `[Gap género % actual]`, `[% bajo banda actual]` | — |
+| Título / pie | `[Ultimo AnioMes]` | — |
+| Barras por depto | `[Salario promedio]` | `DimDepartamento[Nombre]` |
+| Matriz equidad | `[Salario promedio]` | `DimDepartamento[Nombre]` × `GeneroDesc` (añada `NivelJerarquicoDesc` en filas para defender) |
+| 100 % apiladas | `[Headcount mes]` | `DimDepartamento[Nombre]`, `EstadoBanda` |
+| Dispersión | **ninguna medida en Y** | X `NivelJerarquico` (o `NivelJerarquicoDesc`); Y `FactHeadcountMensual[Salario]`; color `DimDepartamento[Nombre]`. Grano = fila del snapshot |
+| Política vs práctica | `[Salario mín]`, `[Salario promedio]`, `[Salario máx]`, `[Banda mínima]`, `[Banda media]`, `[Banda máxima]` | `DimEscalaSalarial[Codigo]` |
+| Histograma | `[Headcount mes]` | `PosicionEnBandaBucket` |
+| Tooltip | `[Posición en banda promedio]`, `[% sobre banda]` | — |
+
+En barras/matriz/histograma de esta página, si el slicer de mes está en “todo el año”, `[Salario promedio]` mezcla snapshots. Las **tarjetas** usan las variantes `* actual`. Alternativa: filtre la página al `[Ultimo AnioMes]` y entonces `[Salario promedio]` = `[Salario promedio actual]`.
+
+### 3.4 Expresiones
+
+Cree las medidas en este orden. CRC = `₡#,0`; % = `0.0%`.
+
+#### 00 Auxiliar
 
 ```dax
-Salidas = SUM ( FactRotacion[ContadorSalida] )
+Días laborables mes = 22
 
-Eventos ausencia = SUM ( FactAusentismo[ContadorEvento] )
-
-Días ausencia = SUM ( FactAusentismo[DiasLaborales] )
-
-Requisitos skill = COUNTROWS ( FactHabilidadEmpleado )
-
-Gaps = SUM ( FactHabilidadEmpleado[TieneGap] )
-
-Salario promedio = AVERAGE ( FactHeadcountMensual[Salario] )
-```
-
-`Días impacto productividad` y `Salidas evitables` sí usan `CALCULATE` porque el filtro es de negocio, no un recálculo:
-
-```dax
-Días impacto productividad =
+Ultimo AnioMes =
 CALCULATE (
-    [Días ausencia],
-    DimTipoAusencia[AfectaProductividad] = TRUE ()
-)
-
-Salidas evitables =
-CALCULATE (
-    [Salidas],
-    DimMotivoSalida[EsEvitable] = TRUE ()
-)
-
-Gaps críticos =
-CALCULATE (
-    [Gaps],
-    DimHabilidad[IsCritical] = TRUE ()
+    MAX ( DimFecha[AnioMes] ),
+    FactHeadcountMensual[EsActivo] = TRUE ()
 )
 ```
 
-### 3.2 Headcount — no sume meses como si fueran personas
+#### 01 Headcount
 
-`FactHeadcountMensual` tiene grano **empleado × mes**. `SUM(EsActivo)` en un año cuenta ~12 veces a cada persona. Sirve como *masa salarial mensual acumulada*, no como plantilla.
+`FactHeadcountMensual` es empleado × mes. `SUM ( EsActivo )` en un año cuenta ~12 veces a cada persona. A grano mes, `[Headcount mes]` y `[Headcount promedio]` coinciden. En tarjetas ejecutivas y denominadores de tasa use **promedio**.
 
 ```dax
 Headcount mes =
@@ -210,23 +575,24 @@ AVERAGEX (
     VALUES ( DimFecha[AnioMes] ),
     [Headcount mes]
 )
+
+Headcount actual =
+VAR Periodo = [Ultimo AnioMes]
+RETURN
+    CALCULATE (
+        [Headcount mes],
+        FILTER ( ALL ( DimFecha[AnioMes] ), DimFecha[AnioMes] = Periodo )
+    )
 ```
 
-En un visual a grano mes, `[Headcount mes]` y `[Headcount promedio]` coinciden. En año o en “todo el historial”, use **promedio**. Esa es la medida que va en tarjetas ejecutivas y como denominador de tasas.
-
-Masa salarial del periodo (promedio de la masa mensual, no la suma de 12 meses):
+#### 02 Rotación
 
 ```dax
-Masa salarial promedio =
-AVERAGEX (
-    VALUES ( DimFecha[AnioMes] ),
-    CALCULATE ( SUM ( FactHeadcountMensual[Salario] ), FactHeadcountMensual[EsActivo] = TRUE () )
-)
-```
+Salidas = SUM ( FactRotacion[ContadorSalida] )
 
-### 3.3 Tasas (aquí sí hace falta DAX)
+Salidas evitables =
+CALCULATE ( [Salidas], DimMotivoSalida[EsEvitable] = TRUE () )
 
-```dax
 Tasa rotación % =
 DIVIDE ( [Salidas], [Headcount promedio] )
 
@@ -236,145 +602,67 @@ DIVIDE ( [Salidas evitables], [Salidas] )
 Antigüedad media al salir =
 AVERAGE ( FactRotacion[AntiguedadMeses] )
 
+Salario al salir promedio =
+AVERAGE ( FactRotacion[SalarioAlSalir] )
+```
+
+#### 03 Ausentismo
+
+```dax
+Eventos ausencia = SUM ( FactAusentismo[ContadorEvento] )
+
+Días ausencia = SUM ( FactAusentismo[DiasLaborales] )
+
+Días impacto productividad =
+CALCULATE ( [Días ausencia], DimTipoAusencia[AfectaProductividad] = TRUE () )
+
+Tasa ausentismo % =
+DIVIDE ( [Días ausencia], [Headcount promedio] * [Días laborables mes] )
+
+% días con impacto productividad =
+DIVIDE ( [Días impacto productividad], [Días ausencia] )
+```
+
+#### 04 Talento
+
+```dax
+Requisitos skill = COUNTROWS ( FactHabilidadEmpleado )
+
+Requisitos críticos =
+CALCULATE ( [Requisitos skill], DimHabilidad[IsCritical] = TRUE () )
+
+Gaps = SUM ( FactHabilidadEmpleado[TieneGap] )
+
+Gaps críticos =
+CALCULATE ( [Gaps], DimHabilidad[IsCritical] = TRUE () )
+
 % gaps =
 DIVIDE ( [Gaps], [Requisitos skill] )
 
 % gaps críticos =
-DIVIDE (
-    [Gaps críticos],
-    CALCULATE ( [Requisitos skill], DimHabilidad[IsCritical] = TRUE () )
-)
+DIVIDE ( [Gaps críticos], [Requisitos críticos] )
 
--- 22 = aproximación de días laborales/mes (documentar en el glosario)
-Tasa ausentismo % =
-DIVIDE ( [Días ausencia], [Headcount promedio] * 22 )
-
-% días con impacto productividad =
-DIVIDE ( [Días impacto productividad], [Días ausencia] )
-
-Gap género % =
-VAR PromM =
-    CALCULATE ( [Salario promedio], DimEmpleado[Genero] = "M" )
-VAR PromF =
-    CALCULATE ( [Salario promedio], DimEmpleado[Genero] = "F" )
-RETURN
-    DIVIDE ( PromM - PromF, PromM )
-
-% bajo banda =
-DIVIDE (
-    CALCULATE ( [Headcount mes], FactHeadcountMensual[EstadoBanda] = "Bajo banda" ),
-    [Headcount mes]
-)
-```
-
-`DIVIDE` evita errores por denominador 0. No use inteligencia de tiempo (`SAMEPERIODLASTYEAR`, etc.) en el PoC: la serie es corta y el seed no está diseñado para YoY estable. Un “vs periodo anterior” se defiende peor que una tendencia mensual simple.
-
-Formato: tasas en porcentaje con 1 decimal; CRC en `#,0`; antigüedad en `0.0`.
-
----
-
-## 4. Páginas y visualizaciones
-
-Filtros de página comunes (salvo Talento): `EsActivo = 1` **solo** en visuals que lean `FactHeadcountMensual`. No lo aplique al informe entero.
-
-En páginas ejecutivas **no** ponga `NumeroEmpleado` ni `NombreCompleto`. El detalle nominativo va, si acaso, a *drill-through* con el aviso de PII sintético.
-
-### 4.1 Página Ejecutivo
-
-Tesis de la página: “¿Dónde está el riesgo de gente?”. Cuatro tarjetas + cuatro gráficos que invitan a entrar a la página temática.
-
-| Visual | Campos | Lectura esperada |
-|--------|--------|------------------|
-| Tarjeta | `[Headcount promedio]` | Plantilla del periodo |
-| Tarjeta | `[Tasa rotación %]` | Comparar contra 1–1,5 % mensual como orden de magnitud (no hay meta en el mart) |
-| Tarjeta | `[Tasa ausentismo %]` | Días perdidos / capacidad |
-| Tarjeta | `[% gaps críticos]` | Talento en riesgo |
-| Línea | Eje `DimFecha[AnioMes]`; `[Tasa rotación %]` y `[Tasa ausentismo %]` (eje combinado o dos líneas) | Co-movimiento en el tiempo |
-| Barras agrupadas | Eje `DimDepartamento[Nombre]`; `[% gaps]`, `[Tasa rotación %]` | Tecnología alta en gaps; Operaciones alta en rotación/ausencia |
-| Anillo (uno solo) | `[Salidas]` por `DimMotivoSalida[Categoria]` | Voluntaria vs involuntaria |
-| Barras | `[Salario promedio]` por departamento | Comercial arriba, Operaciones abajo |
-
-No llene el ejecutivo de matrices. Cada gráfico debe *hacer clic* hacia su página (botón o bookmark).
-
-### 4.2 Página Talento — ¿Tenemos las habilidades correctas?
-
-Hecho: `FactHabilidadEmpleado`. Grano: empleado × habilidad **requerida por el puesto**. Un gap es `NivelActual < NivelRequerido` (o sin evaluación: `NivelActual` nulo).
-
-| KPI | Medida | Visual |
-|-----|--------|--------|
-| Cobertura con gap | `[% gaps]` | Tarjeta |
-| Gaps en skills críticos | `[Gaps críticos]` y `[% gaps críticos]` | Tarjeta + KPI |
-| Requisitos evaluados | `[Requisitos skill]` | Tarjeta de contexto (no es un KPI de negocio) |
-
-| Visual | Configuración | Por qué |
-|--------|----------------|---------|
-| Barras horizontales | `DimDepartamento[Nombre]` vs `[% gaps]`; color por `[% gaps críticos]` o segundo eje `[Gaps críticos]` | El seed concentra el problema en Tecnología |
-| Matriz | Filas `DimPuesto[Nombre]`; columnas `DimHabilidad[Nombre]`; valores `AVERAGE(NivelActual)` y `AVERAGE(NivelRequerido)` **o** `[% gaps]` | Perfil del puesto vs realidad. Formato condicional rojo si `% gaps` alto |
-| Gráfico de columnas apiladas | Eje `DimHabilidad[Nombre]`; leyenda `CriticaDesc`; valor `[Gaps]` | SQL / ETL / Cloud / Ciberseguridad deben destacar |
-| Dispersión | X `AVERAGE(NivelRequerido)`; Y `AVERAGE(NivelActual)`; tamaño `[Requisitos skill]`; detalle `DimHabilidad[Nombre]` | Puntos bajo la diagonal = déficit |
-| Segmentación | `DimHabilidad[Categoria]`, `CriticaDesc`, `FactHabilidadEmpleado[EsObligatoria]` | Obligatorio vs deseable |
-| Tabla *drill-through* (página aparte) | Puesto, habilidad, `NivelActual`, `NivelRequerido`, `DiferenciaNiveles` | Solo si la defensa pide el ejemplo; **sin** cédula |
-
-No use un mapa de calor empleado × habilidad en el tablero de mando (~180 × N habilidades es ilegible). Eso es operacional, no ejecutivo.
-
-Medida extra si el slicer de fecha queda activo por error:
-
-```dax
 % gaps (perfil actual) =
 CALCULATE ( [% gaps], REMOVEFILTERS ( DimFecha ) )
+
+Nivel actual promedio =
+AVERAGE ( FactHabilidadEmpleado[NivelActual] )
+
+Nivel requerido promedio =
+AVERAGE ( FactHabilidadEmpleado[NivelRequerido] )
+
+Diferencia de niveles promedio =
+AVERAGE ( FactHabilidadEmpleado[DiferenciaNiveles] )
 ```
 
-### 4.3 Página Rotación — ¿Por qué se van y cuándo?
-
-Hecho: `FactRotacion`. Grano: **una fila = una salida**.
-
-| KPI | Medida |
-|-----|--------|
-| Salidas | `[Salidas]` |
-| Tasa | `[Tasa rotación %]` |
-| % evitables | `[% salidas evitables]` |
-| Antigüedad media al salir | `[Antigüedad media al salir]` |
-
-| Visual | Configuración | Hallazgo de diseño |
-|--------|----------------|---------------------|
-| Línea + columnas | Columnas `[Salidas]`; línea `[Tasa rotación %]`; eje `AnioMes` | Volumen vs tasa (la tasa usa headcount promedio del mes) |
-| Barras apiladas | Eje `DimDepartamento[Nombre]`; leyenda `DimMotivoSalida[Nombre]` o `Categoria` | TI: `Mejor oferta salarial` / `Falta de crecimiento`. Operaciones: `Clima laboral` / `Bajo desempeño` |
-| Anillo o barras | `[Salidas]` por `EvitableDesc` | Cuánto podría intervenir RH |
-| Histograma (columnas) | Eje `RangoAntiguedad`; valor `[Salidas]` | ¿Se van en el primer año? |
-| Cajas o columnas | `[Antigüedad media al salir]` y `AVERAGE(SalarioAlSalir)` por motivo | Precio de perder a alguien por oferta vs por desempeño |
-| Tabla | Motivo, categoría, evitabilidad, salidas, % del total (`% of grand total` del visual, sin DAX nuevo) | |
-
-No grafique `ContadorSalida` en un mapa si hay pocas sedes: cinco barras de `DimUbicacion[Nombre]` bastan.
-
-### 4.4 Página Ausentismo — ¿Hay patrones que afecten productividad?
-
-Hecho: `FactAusentismo` (solo ausencias **aprobadas**, grano evento). Relacione el análisis a `FechaInicio`.
-
-| KPI | Medida |
-|-----|--------|
-| Días de ausencia | `[Días ausencia]` |
-| Eventos | `[Eventos ausencia]` |
-| Tasa | `[Tasa ausentismo %]` |
-| % con impacto | `[% días con impacto productividad]` |
-
-| Visual | Configuración | Hallazgo de diseño |
-|--------|----------------|---------------------|
-| Matriz tipo heatmap | Filas `DimDepartamento[Nombre]`; columnas `DimFecha[NombreMes]` (ordenar por `Mes`); valor `[Días ausencia]`; formato condicional de escala de color | Estacionalidad (enfermedad Dic/Ene; vacaciones Jul/Dic) y pico de Operaciones |
-| Columnas apiladas | Eje `NombreMes`; leyenda `DimTipoAusencia[Nombre]`; `[Días ausencia]` | Composición del patrón |
-| Barras | `DimTipoAusencia[Nombre]` vs `[Días ausencia]`; color por `ImpactoProdDesc` | Vacaciones y enfermedad pesan; `Capacitación externa` y `Teletrabajo excepcional` no marcan productividad |
-| Línea | `[Tasa ausentismo %]` por `AnioMes` | Independiente del tamaño de plantilla |
-| Columnas | `[Días ausencia]` por `DimFecha[NombreDiaSemana]` (ordenar por `DiaSemana`) | Patrones de lunes/viernes si el seed los produce |
-| Tarjeta de desglose | `CALCULATE([Días ausencia], DimTipoAusencia[Nombre] = "Incapacidad por enfermedad")` — o un visual filtrado, **sin** una medida por cada tipo | El catálogo ya distingue tipos; un slicer de tipo > 8 medidas clonadas |
-
-`FactAusentismo` no tiene `UbicacionKey`. No prometa un mapa de ausentismo por sede.
-
-### 4.5 Página Compensación — ¿Es justa la estructura salarial?
-
-Hecho: `FactHeadcountMensual` + `DimEscalaSalarial`. Trabaje con el **último mes del filtro** o con el promedio del periodo; no mezcle salarios de 24 meses en un “promedio” sin decirlo. Patrón limpio para “foto actual”:
+#### 05 Compensación
 
 ```dax
-Ultimo AnioMes =
-CALCULATE ( MAX ( DimFecha[AnioMes] ), FactHeadcountMensual[EsActivo] = TRUE () )
+Salario promedio =
+CALCULATE (
+    AVERAGE ( FactHeadcountMensual[Salario] ),
+    FactHeadcountMensual[EsActivo] = TRUE ()
+)
 
 Salario promedio actual =
 VAR Periodo = [Ultimo AnioMes]
@@ -383,27 +671,138 @@ RETURN
         [Salario promedio],
         FILTER ( ALL ( DimFecha[AnioMes] ), DimFecha[AnioMes] = Periodo )
     )
+
+Salario mín =
+CALCULATE (
+    MIN ( FactHeadcountMensual[Salario] ),
+    FactHeadcountMensual[EsActivo] = TRUE ()
+)
+
+Salario máx =
+CALCULATE (
+    MAX ( FactHeadcountMensual[Salario] ),
+    FactHeadcountMensual[EsActivo] = TRUE ()
+)
+
+Masa salarial mes =
+CALCULATE (
+    SUM ( FactHeadcountMensual[Salario] ),
+    FactHeadcountMensual[EsActivo] = TRUE ()
+)
+
+Masa salarial promedio =
+AVERAGEX ( VALUES ( DimFecha[AnioMes] ), [Masa salarial mes] )
+
+Masa salarial actual =
+VAR Periodo = [Ultimo AnioMes]
+RETURN
+    CALCULATE (
+        [Masa salarial mes],
+        FILTER ( ALL ( DimFecha[AnioMes] ), DimFecha[AnioMes] = Periodo )
+    )
+
+Gap género % =
+VAR PromM = CALCULATE ( [Salario promedio], DimEmpleado[Genero] = "M" )
+VAR PromF = CALCULATE ( [Salario promedio], DimEmpleado[Genero] = "F" )
+RETURN
+    DIVIDE ( PromM - PromF, PromM )
+
+Gap género % actual =
+VAR PromM = CALCULATE ( [Salario promedio actual], DimEmpleado[Genero] = "M" )
+VAR PromF = CALCULATE ( [Salario promedio actual], DimEmpleado[Genero] = "F" )
+RETURN
+    DIVIDE ( PromM - PromF, PromM )
+
+Posición en banda promedio =
+CALCULATE (
+    AVERAGE ( FactHeadcountMensual[PosicionEnBandaPct] ),
+    FactHeadcountMensual[EsActivo] = TRUE ()
+)
+
+% bajo banda =
+DIVIDE (
+    CALCULATE ( [Headcount mes], FactHeadcountMensual[EstadoBanda] = "Bajo banda" ),
+    [Headcount mes]
+)
+
+% sobre banda =
+DIVIDE (
+    CALCULATE ( [Headcount mes], FactHeadcountMensual[EstadoBanda] = "Sobre banda" ),
+    [Headcount mes]
+)
+
+% bajo banda actual =
+VAR Periodo = [Ultimo AnioMes]
+RETURN
+    CALCULATE (
+        [% bajo banda],
+        FILTER ( ALL ( DimFecha[AnioMes] ), DimFecha[AnioMes] = Periodo )
+    )
+
+Banda mínima = MIN ( DimEscalaSalarial[SalarioMinimo] )
+Banda media = MIN ( DimEscalaSalarial[SalarioMedio] )
+Banda máxima = MIN ( DimEscalaSalarial[SalarioMaximo] )
 ```
 
-Úsela en esta página; en tendencia mensual use `[Salario promedio]` sin ese recorte.
+`MIN` de la política es correcto: por grado los tres importes son constantes. En un visual filtrado a G3 coinciden con 950 000 / 1 200 000 / 1 450 000 CRC.
 
-| KPI | Medida |
-|-----|--------|
-| Salario promedio | `[Salario promedio actual]` o `[Salario promedio]` |
-| Masa salarial | `[Masa salarial promedio]` |
-| Gap de género | `[Gap género %]` |
-| % bajo banda | `[% bajo banda]` |
+### 3.5 Convenciones
 
-| Visual | Configuración | Hallazgo de diseño |
-|--------|----------------|---------------------|
-| Barras | `[Salario promedio]` por `DimDepartamento[Nombre]` | Comercial por encima, Operaciones por debajo |
-| Matriz | Filas departamento; columnas `DimEmpleado[GeneroDesc]`; `[Salario promedio]` | Gap leve en Tecnología |
-| Columnas apiladas al 100 % | Eje `DimDepartamento[Nombre]`; leyenda `EstadoBanda`; `[Headcount mes]` | Gente fuera de banda |
-| Dispersión | X `NivelJerarquico`; Y `Salario`; detalle empleado **solo en drill-through**; color departamento | Dispersión dentro del grado |
-| Box-and-whisker o columnas | `DimEscalaSalarial[Codigo]` (G1–G5) vs min/promedio/max de `Salario` **y** líneas de `SalarioMinimo` / `SalarioMedio` / `SalarioMaximo` (esas tres son atributos de dimensión: `MIN`/`MAX` iguales por grado) | ¿La práctica respeta la política de bandas? |
-| Histograma | Eje `PosicionEnBandaPct` (agrupar en buckets 0–20, 20–40… con columna o con el eje del visual) | Concentración bajo el medio de banda |
+- `DIVIDE` en todas las tasas (denominador 0 → en blanco, no error).
+- No `SAMEPERIODLASTYEAR` ni equivalentes: el seed no está diseñado para YoY.
+- No `COUNTROWS ( DimEmpleado )` como plantilla (SCD2 + bajas).
+- No reescriba `ContadorSalida`, `DiasLaborales`, `TieneGap`: ya son aditivos del mart.
+- Formato: tasas `0.0%`; CRC `₡#,0`; antigüedad y niveles `#,0.0`; conteos `#,0`.
 
-Para equidad, compare **mismo `NivelJerarquico` o mismo `Grado`**, no el promedio crudo del departamento (mezcla operarios y gerentes). La matriz Depto × Nivel es la que se defiende.
+---
+
+## 4. Páginas y visualizaciones
+
+Las medidas se toman **solo** de `_Medidas` (§3.3 tiene el mapa visual por visual). Las columnas, de §2.3. Este apartado describe la tesis de cada página, no vuelve a definir DAX.
+
+Filtros de página comunes (salvo Talento): `EsActivo = 1` **solo** en visuals que lean `FactHeadcountMensual`. No lo aplique al informe entero.
+
+En páginas ejecutivas **no** ponga `NumeroEmpleado` ni `NombreCompleto`. El detalle nominativo va, si acaso, a *drill-through* con el aviso de PII sintético.
+
+### 4.1 Página Ejecutivo
+
+Tesis: “¿Dónde está el riesgo de gente?”. Cuatro tarjetas + cuatro gráficos que invitan a entrar a la página temática. Campos: §3.3 → Ejecutivo.
+
+Lectura esperada: `[Tasa rotación %]` en el orden de 1–1,5 % mensual (no hay meta en el mart); Tecnología alta en `[% gaps]`; Operaciones alta en rotación; Comercial arriba en `[Salario promedio]`.
+
+No llene el ejecutivo de matrices. Cada gráfico debe *hacer clic* hacia su página (botón o bookmark).
+
+### 4.2 Página Talento — ¿Tenemos las habilidades correctas?
+
+Hecho: `FactHabilidadEmpleado`. Grano: empleado × habilidad **requerida por el puesto**. Un gap es `NivelActual < NivelRequerido` (o sin evaluación: `NivelActual` nulo). Campos: §3.3 → Talento.
+
+El seed concentra el problema en Tecnología. En la matriz, formato condicional rojo si `[% gaps]` es alto. En la dispersión, puntos bajo la diagonal = déficit (SQL / ETL / Cloud / Ciberseguridad). Slicers: `Categoria`, `CriticaDesc`, `EsObligatoriaDesc` (no el bit `EsObligatoria`).
+
+No use un mapa de calor empleado × habilidad (~180 × N es ilegible). El drill-through va **sin** cédula.
+
+### 4.3 Página Rotación — ¿Por qué se van y cuándo?
+
+Hecho: `FactRotacion`. Grano: **una fila = una salida**. Campos: §3.3 → Rotación.
+
+Hallazgos de diseño: TI → `Mejor oferta salarial` / `Falta de crecimiento`; Operaciones → `Clima laboral` / `Bajo desempeño`. El histograma de `RangoAntiguedad` responde si se van en el primer año. El % del total de la tabla es la opción del visual, no una medida nueva.
+
+No grafique `ContadorSalida` en un mapa: cinco barras de `DimUbicacion[Nombre]` con `[Salidas]` bastan.
+
+### 4.4 Página Ausentismo — ¿Hay patrones que afecten productividad?
+
+Hecho: `FactAusentismo` (solo ausencias **aprobadas**, grano evento). Relacione el análisis a `FechaInicio`. Campos: §3.3 → Ausentismo.
+
+Hallazgos: heatmap con estacionalidad (enfermedad Dic/Ene; vacaciones Jul/Dic) y pico de Operaciones. Vacaciones y enfermedad pesan; `Capacitación externa` y `Teletrabajo excepcional` no marcan productividad (`ImpactoProdDesc`). Un visual filtrado a “Incapacidad por enfermedad” sustituye a una medida por tipo.
+
+`FactAusentismo` no tiene `UbicacionKey`. No prometa un mapa de ausentismo por sede.
+
+### 4.5 Página Compensación — ¿Es justa la estructura salarial?
+
+Hecho: `FactHeadcountMensual` + `DimEscalaSalarial`. Campos: §3.3 → Compensación.
+
+Tarjetas = variantes `* actual` (foto de `[Ultimo AnioMes]`). Barras y matriz de tendencia = `[Salario promedio]` (respeta el slicer de mes). La dispersión es la excepción: eje Y = columna `Salario`, no una medida (grano fila). El histograma usa `PosicionEnBandaBucket`, no el % continuo.
+
+Hallazgos: Comercial por encima, Operaciones por debajo; gap leve de género en Tecnología; gente fuera de `EstadoBanda`. Compare equidad a **mismo `NivelJerarquicoDesc` o mismo `Codigo` de escala**, no el promedio crudo del departamento.
 
 ---
 
@@ -436,9 +835,9 @@ Cierre con el límite del modelo: capacitaciones y desempeño siguen en el OLTP;
 
 1. Import de las 9 dimensiones y 4 hechos; renombre quitar esquema `dm`.
 2. Relaciones de la tabla §2.1; marcar `DimFecha`.
-3. Ocultar claves; columnas de apoyo de §2.3; ordenar mes y rangos.
-4. Tabla `_Medidas` con §3 (no más de ~20 medidas en el PoC).
-5. Cinco páginas; slicers sincronizados salvo fecha en Talento y ubicación global.
+3. Ocultar claves; columnas nativas + calculadas de §2.3; Ordenar por columna (§2.3.3).
+4. Tabla `_Medidas` (§3.1–3.4): 42 medidas en 6 carpetas; no cree medidas extra por depto o tipo.
+5. Cinco páginas según el mapa §3.3; slicers sincronizados salvo fecha en Talento y ubicación global.
 6. Formato CRC / % ; tooltips con grano (“una barra = una salida”, “una celda = días de ausencia en el mes”).
 7. Panel de formato: título que **afirma** el hallazgo (“Tecnología concentra el déficit de skills críticos”), no el nombre de la tabla.
 8. En la memoria: un `.pbix`, modelo Import sobre `HR_DataMart`, tasas con `DIVIDE` y headcount promedio mensual.
