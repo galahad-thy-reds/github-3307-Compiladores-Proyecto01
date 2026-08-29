@@ -385,7 +385,7 @@ Slicers del informe (sincronizar en Ejecutivo, Rotación, Ausentismo, Compensaci
 
 - `DimFecha[Anio]` y `DimFecha[NombreMes]` (no el día: el headcount vive en el día 1).
 - `DimDepartamento[Nombre]`
-- `DimPuesto[FamiliaPuesto]` y `NivelJerarquico`
+- `DimPuesto[FamiliaPuesto]` y `NivelJerarquicoDesc`
 
 **No sincronice fecha en Talento.** `FactHabilidadEmpleado` es el perfil vigente (empleado × habilidad requerida), no una serie mensual. Un slicer de año puede vaciar la página si la evaluación cayó en otro periodo. En esa página use `REMOVEFILTERS(DimFecha)` en las medidas de gap, o desactive la sincronización.
 
