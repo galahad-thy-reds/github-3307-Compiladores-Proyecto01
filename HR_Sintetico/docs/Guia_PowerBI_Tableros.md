@@ -65,13 +65,17 @@ Estrella clásica. Todas las relaciones **1 → \*** desde dimensión hacia hech
 
 Marque `DimFecha[Fecha]` como **tabla de fechas**. No cree una tabla calendario en DAX: ya está en el mart.
 
+Relacione **siempre** `DimFecha[FechaKey]` (entero `yyyymmdd`) con las `*Key` de los hechos. No una `Fecha` (tipo fecha) con un `FechaKey` (entero): Power BI deja crear la relación, **ninguna fila coincide** y todos los visuals con slicer de año/mes salen en blanco.
+
+Desactive **Archivo → Opciones → Vista de modelo → Autodetectar nuevas relaciones**. Cree solo las de esta tabla. Borre cualquier relación extra, sobre todo si involucra `_Medidas`.
+
 No relacione hechos entre sí. Si un visual necesita tasa, el DAX usa dos medidas (numerador del evento + denominador de headcount), no un join.
 
 ### 2.2 Lo que se oculta
 
 Oculte en el panel de datos: `*Key`, `*BK`, `*ID` de hechos, `HashDiff`, `FechaInicioValidez`, `FechaFinValidez`. El usuario de negocio no debe construir gráficos arrastrando claves.
 
-**No** ponga `DimEmpleado[EsActual] = 1` como filtro de informe. Los hechos históricos apuntan a la versión SCD2 vigente *en el evento*; filtrar “solo actual” borra salidas y ausencias de empleados que ya no están.
+**No** ponga `DimEmpleado[EsActual]` como filtro de informe (ni `= 1` ni `= TRUE`). Los hechos históricos apuntan a la versión SCD2 vigente *en el evento*; filtrar “solo actual” borra salidas y ausencias de empleados que ya no están. Si el filtro no coincide con el tipo Boolean, **todas** las tablas de hechos quedan vacías y las medidas salen en blanco.
 
 ### 2.3 Columnas que usan los tableros
 
@@ -277,6 +281,16 @@ RETURN
 
 Oculte `RangoAntiguedadOrden`. En cada tabla: `RangoAntiguedad` → Ordenar por → `RangoAntiguedadOrden`.
 
+**`EsActivoN` y `TieneGapN`** — enteros 0/1. `INT` acepta Boolean y 1/0; las medidas filtran `= 1` y no vuelven a usar `SUM` ni `TRUE ()` sobre el `BIT`. Oculte estas columnas: no van a un slicer.
+
+```dax
+-- FactHeadcountMensual
+EsActivoN = INT ( FactHeadcountMensual[EsActivo] )
+
+-- FactHabilidadEmpleado
+TieneGapN = INT ( FactHabilidadEmpleado[TieneGap] )
+```
+
 **`FactHeadcountMensual[PosicionEnBandaPct]`** — decimal 0–1 (formatear como %). Base del histograma y de `[Posición en banda promedio]`.
 
 ```dax
@@ -387,6 +401,7 @@ La columna de orden **no debe referenciar** a la columna que ordena. *Ordenar po
 | `EstadoBanda` | Leyenda 100 % apilada | Compensación |
 | `PosicionEnBandaPct` | No va al eje (es continuo); alimenta el bucket y la medida | Compensación |
 | `PosicionEnBandaBucket` | Eje del histograma | Compensación |
+| `EsActivoN`, `TieneGapN` | Solo las medidas §3.2 (ocultas) | — |
 
 ### 2.4 Filtros sincronizados
 
@@ -433,6 +448,8 @@ Cree primero la tabla, luego las medidas **en el orden del catálogo §3.2** (ca
 4. Clic derecho en `_Medidas` → **Nueva medida** (no “nueva columna”).
 5. Tras crear cada medida: Vista de modelo → panel Propiedades → **Carpeta para mostrar** (`00 Auxiliar`, `01 Headcount`, `02 Rotación`, `03 Ausentismo`, `04 Talento`, `05 Compensación`) → **Formato** de la ficha §3.2.
 6. No oculte la tabla `_Medidas`: es el punto de entrada del modelo.
+7. **No cree relaciones** desde `_Medidas` hacia ninguna tabla. Autodetectar a veces une `_` (el `0`) con una clave: el modelo se recorta a nada y todas las medidas quedan en blanco.
+8. Las medidas **no tienen filas**. En Vista de datos/tabla `_Medidas` solo verá `_` = 0. Los valores salen en la **Vista de informe** (tarjeta, gráfico). Eso no es un error.
 
 No cree una medida por departamento, por tipo de ausencia ni por mes. El eje o el slicer de la dimensión ya recorta el contexto.
 
@@ -458,7 +475,7 @@ Días laborables mes = 22
 Ultimo AnioMes =
 CALCULATE (
     MAX ( DimFecha[AnioMes] ),
-    FactHeadcountMensual[EsActivo] = TRUE ()
+    FactHeadcountMensual[EsActivoN] = 1
 )
 ```
 
@@ -466,7 +483,7 @@ CALCULATE (
 
 `FactHeadcountMensual` es empleado × mes. Contar filas del snapshot en un año cuenta ~12 veces a cada persona. A grano mes, #3 y #4 coinciden. En tarjetas ejecutivas y denominadores de tasa use **#4**.
 
-En Power BI un `BIT` de SQL llega como **Boolean** (`TRUE`/`FALSE`). `SUM` no acepta Boolean: use `COUNTROWS` con filtro. Lo mismo aplica a `TieneGap` (#19).
+En Power BI un `BIT` de SQL llega como Boolean. Por eso existen `EsActivoN` y `TieneGapN` (§2.3.2): las medidas filtran `= 1`.
 
 **3. `Headcount mes`** — Entero. Activos del contexto (a grano año es la suma de snapshots).
 
@@ -474,16 +491,16 @@ En Power BI un `BIT` de SQL llega como **Boolean** (`TRUE`/`FALSE`). `SUM` no ac
 Headcount mes =
 CALCULATE (
     COUNTROWS ( FactHeadcountMensual ),
-    FactHeadcountMensual[EsActivo] = TRUE ()
+    FactHeadcountMensual[EsActivoN] = 1
 )
 ```
 
-**4. `Headcount promedio`** — Entero (1 decimal opcional). Promedio de #3 por `AnioMes`.
+**4. `Headcount promedio`** — Entero (1 decimal opcional). Promedio de #3 **solo en meses que tienen snapshot**. No itere `VALUES ( DimFecha[AnioMes] )` sobre todo el calendario (2019–2028): la mayoría de meses no tienen hecho y, según el contexto, la media queda en blanco o diluida.
 
 ```dax
 Headcount promedio =
 AVERAGEX (
-    VALUES ( DimFecha[AnioMes] ),
+    SUMMARIZE ( FactHeadcountMensual, DimFecha[AnioMes] ),
     [Headcount mes]
 )
 ```
@@ -593,13 +610,13 @@ Requisitos críticos =
 CALCULATE ( [Requisitos skill], DimHabilidad[IsCritical] = TRUE () )
 ```
 
-**19. `Gaps`** — Entero. `TieneGap` es Boolean en Power BI: no use `SUM`.
+**19. `Gaps`** — Entero. Filtra `TieneGapN = 1` (§2.3.2).
 
 ```dax
 Gaps =
 CALCULATE (
     COUNTROWS ( FactHabilidadEmpleado ),
-    FactHabilidadEmpleado[TieneGap] = TRUE ()
+    FactHabilidadEmpleado[TieneGapN] = 1
 )
 ```
 
@@ -660,7 +677,7 @@ AVERAGE ( FactHabilidadEmpleado[DiferenciaNiveles] )
 Salario promedio =
 CALCULATE (
     AVERAGE ( FactHeadcountMensual[Salario] ),
-    FactHeadcountMensual[EsActivo] = TRUE ()
+    FactHeadcountMensual[EsActivoN] = 1
 )
 ```
 
@@ -682,7 +699,7 @@ RETURN
 Salario mín =
 CALCULATE (
     MIN ( FactHeadcountMensual[Salario] ),
-    FactHeadcountMensual[EsActivo] = TRUE ()
+    FactHeadcountMensual[EsActivoN] = 1
 )
 ```
 
@@ -692,7 +709,7 @@ CALCULATE (
 Salario máx =
 CALCULATE (
     MAX ( FactHeadcountMensual[Salario] ),
-    FactHeadcountMensual[EsActivo] = TRUE ()
+    FactHeadcountMensual[EsActivoN] = 1
 )
 ```
 
@@ -702,7 +719,7 @@ CALCULATE (
 Masa salarial mes =
 CALCULATE (
     SUM ( FactHeadcountMensual[Salario] ),
-    FactHeadcountMensual[EsActivo] = TRUE ()
+    FactHeadcountMensual[EsActivoN] = 1
 )
 ```
 
@@ -710,7 +727,10 @@ CALCULATE (
 
 ```dax
 Masa salarial promedio =
-AVERAGEX ( VALUES ( DimFecha[AnioMes] ), [Masa salarial mes] )
+AVERAGEX (
+    SUMMARIZE ( FactHeadcountMensual, DimFecha[AnioMes] ),
+    [Masa salarial mes]
+)
 ```
 
 **33. `Masa salarial actual`** — CRC. Masa del #2.
@@ -751,7 +771,7 @@ RETURN
 Posición en banda promedio =
 CALCULATE (
     AVERAGE ( FactHeadcountMensual[PosicionEnBandaPct] ),
-    FactHeadcountMensual[EsActivo] = TRUE ()
+    FactHeadcountMensual[EsActivoN] = 1
 )
 ```
 
@@ -887,16 +907,51 @@ En barras/matriz/histograma de esta página, si el slicer de mes está en “tod
 
 ### 3.4 Orden de creación
 
-Las expresiones están en el catálogo §3.2. Créelas de #1 a #42: `#8 Tasa rotación %` necesita `#6` y `#4`; las variantes `* actual` necesitan `#2 Ultimo AnioMes`; `#37` necesita la columna `EstadoBanda` de §2.3.2.
+Las expresiones están en el catálogo §3.2. Cree primero las columnas `EsActivoN` y `TieneGapN` (§2.3.2). Luego las medidas de #1 a #42: `#8 Tasa rotación %` necesita `#6` y `#4`; las variantes `* actual` necesitan `#2 Ultimo AnioMes`; `#37` necesita `EstadoBanda`.
 
 ### 3.5 Convenciones
 
 - `DIVIDE` en todas las tasas (denominador 0 → en blanco, no error).
-- Un `BIT` de SQL (`EsActivo`, `TieneGap`, `EsEvitable`, `AfectaProductividad`, `IsCritical`) llega como Boolean. **No** use `SUM` sobre esas columnas (`The function SUM cannot work with values of type Boolean`). Cuente filas con `COUNTROWS` y un filtro `= TRUE ()`, o filtre una medida ya numérica (`CALCULATE ( [Salidas], DimMotivoSalida[EsEvitable] = TRUE () )`).
+- Un `BIT` de SQL llega como Boolean. **No** use `SUM` sobre esas columnas. Use `EsActivoN` / `TieneGapN` (`INT`) y filtre `= 1`. Flags de dimensión (`EsEvitable`, `IsCritical`, `AfectaProductividad`) en `CALCULATE` sí pueden ir `= TRUE ()` si el tipo sigue siendo Boolean.
 - No `SAMEPERIODLASTYEAR` ni equivalentes: el seed no está diseñado para YoY.
 - No `COUNTROWS ( DimEmpleado )` como plantilla (SCD2 + bajas).
 - `ContadorSalida`, `ContadorEvento` y `DiasLaborales` sí son numéricos: `SUM` es correcto.
 - Formato: tasas `0.0%`; CRC `₡#,0`; antigüedad y niveles `#,0.0`; conteos `#,0`.
+- Si **todas** las medidas salen en blanco, no siga pintando visuals: vaya a §3.6.
+
+### 3.6 Medidas en blanco (diagnóstico)
+
+Los hechos se ven en Vista de datos y las medidas no. Eso es normal **en parte**: las medidas no tienen filas. El resto suele ser filtro o relación, no “el DAX está mal copiado”.
+
+Haga las pruebas **en este orden**, en una página nueva sin slicers ni filtros de página/informe.
+
+| # | Prueba | Si muestra número | Si sigue en blanco |
+|---|--------|-------------------|--------------------|
+| 1 | Tarjeta con `Días laborables mes` (constante 22) | El motor evalúa medidas | La medida no es medida (es columna) o el visual está roto |
+| 2 | Tarjeta `COUNTROWS ( FactRotacion )` (medida temporal) | El hecho no está filtrado a vacío | Relación o filtro de informe recorta el modelo; ver 3–5 |
+| 3 | Tarjeta `[Salidas]` | `SUM` numérico funciona | Filtro de informe / slicer sincronizado / `EsActual` |
+| 4 | Tarjeta `[Headcount mes]` | `EsActivoN` está bien | Falta la columna `EsActivoN`, o no hay filas con `= 1` |
+| 5 | Misma tarjeta **con** slicer de año | El `FechaKey` une bien | Relacionó `DimFecha[Fecha]` con un `*Key` entero, o el año del slicer no tiene hechos (el snapshot son ~24 meses) |
+
+Causas que vacían **todas** las medidas a la vez:
+
+1. **Está mirando Vista de datos de `_Medidas`.** Solo existe `_` = 0. Pase a Vista de informe y ponga una **tarjeta**.
+2. **`_Medidas` tiene una relación.** Bórrela. Autodetectar no debe estar activo.
+3. **Filtro de informe** en `DimEmpleado[EsActual]` o `EsActivo = 1` (el `BIT` es Boolean: `1` no coincide → cero filas en la dimensión → los 4 hechos quedan vacíos).
+4. **Slicers sincronizados** en un año/mes sin hechos. `FactHeadcountMensual` cubre los últimos ~24 meses, no todo `DimFecha` (desde 2019). Desmarque el slicer o elija un mes reciente.
+5. **Relación de fecha mal tipada** (`Fecha` date vs `FechaKey` int). Debe ser `DimFecha[FechaKey]` → `Fact*[Fecha*Key]`, activa, 1 a muchos, filtro en un sentido.
+6. **`[Headcount promedio]` iterando todo el calendario.** Use `SUMMARIZE ( FactHeadcountMensual, DimFecha[AnioMes] )` como en #4. Las tasas del ejecutivo dependen de esa medida: si ella está en blanco, `[Tasa rotación %]` y `[Tasa ausentismo %]` también.
+
+Medidas temporales de diagnóstico (bórrrelas después):
+
+```dax
+_Diag filas rotación = COUNTROWS ( FactRotacion )
+_Diag filas headcount = COUNTROWS ( FactHeadcountMensual )
+_Diag filas skill = COUNTROWS ( FactHabilidadEmpleado )
+_Diag activo = CALCULATE ( COUNTROWS ( FactHeadcountMensual ), FactHeadcountMensual[EsActivoN] = 1 )
+```
+
+Si `_Diag filas rotación` tiene número y `[Salidas]` no, la expresión de `#6` no es la del catálogo (columna calculada, nombre de tabla distinto, o `SUM` sobre otra columna). Si `_Diag filas headcount` tiene número y `_Diag activo` no, cree `EsActivoN` y revise que `INT ( EsActivo )` dé 1.
 
 ---
 
@@ -904,7 +959,7 @@ Las expresiones están en el catálogo §3.2. Créelas de #1 a #42: `#8 Tasa rot
 
 Las medidas se toman **solo** de `_Medidas` (expresión en §3.2; mapa visual en §3.3). Las columnas, de §2.3. Este apartado describe la tesis de cada página, no vuelve a definir DAX.
 
-Filtros de página comunes (salvo Talento): `EsActivo` = **TRUE** (no `1`: en Power BI es Boolean) **solo** en visuals que lean `FactHeadcountMensual`. No lo aplique al informe entero.
+Filtros de página comunes (salvo Talento): `EsActivoN = 1` **solo** en visuals que lean `FactHeadcountMensual`. No lo aplique al informe entero (vaciaría fechas/depto para los otros hechos si el filtro se malinterpreta). No use `EsActivo = 1` sobre el Boolean original.
 
 En páginas ejecutivas **no** ponga `NumeroEmpleado` ni `NombreCompleto`. El detalle nominativo va, si acaso, a *drill-through* con el aviso de PII sintético.
 
@@ -977,10 +1032,10 @@ Cierre con el límite del modelo: capacitaciones y desempeño siguen en el OLTP;
 
 ## 7. Checklist de implementación
 
-1. Import de las 9 dimensiones y 4 hechos; renombre quitar esquema `dm`.
-2. Relaciones de la tabla §2.1; marcar `DimFecha`.
-3. Ocultar claves; columnas nativas + calculadas de §2.3; Ordenar por columna (§2.3.3).
-4. Tabla `_Medidas` (§3.1–3.2): 42 medidas con su DAX; no cree medidas extra por depto o tipo.
+1. Import de las 9 dimensiones y 4 hechos; renombre quitar esquema `dm`. Desactive autodetectar relaciones.
+2. Relaciones de la tabla §2.1 (`FechaKey` entero con `FechaKey`); marcar `DimFecha[Fecha]`. Ninguna relación a `_Medidas`.
+3. Ocultar claves; columnas nativas + calculadas de §2.3 (incluya `EsActivoN` y `TieneGapN`); Ordenar por columna (§2.3.3).
+4. Tabla `_Medidas` (§3.1–3.2): 42 medidas con su DAX; no cree medidas extra por depto o tipo. Si salen en blanco, §3.6.
 5. Cinco páginas según el mapa §3.3; Vista → Sincronizar segmentaciones (§2.4): fecha/depto/familia en Ejecutivo + Rotación + Ausentismo + Compensación; no sincronice fecha en Talento ni ubicación en todo el informe.
 6. Formato CRC / % ; tooltips con grano (“una barra = una salida”, “una celda = días de ausencia en el mes”).
 7. Panel de formato: título que **afirma** el hallazgo (“Tecnología concentra el déficit de skills críticos”), no el nombre de la tabla.
