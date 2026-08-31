@@ -390,15 +390,28 @@ La columna de orden **no debe referenciar** a la columna que ordena. *Ordenar po
 
 ### 2.4 Filtros sincronizados
 
-Slicers del informe (sincronizar en Ejecutivo, Rotación, Ausentismo, Compensación):
+En Power BI un *slicer* (segmentación) recorta **solo la página donde está**, salvo que se indique lo contrario. **Filtros sincronizados** es esa excepción: la misma selección se replica en otras páginas del `.pbix`.
+
+No es un filtro del panel (informe / página / visual) ni una relación bidireccional del modelo. Es una opción de la vista **Vista → Sincronizar segmentaciones** (*Sync slicers*). Por cada slicer y cada página hay dos casillas:
+
+| Casilla | Qué hace |
+|---------|----------|
+| Filtro (el icono de sincronizar) | La selección de esa página **aplica** también aquí. El usuario elige “Tecnología” en Ejecutivo y, al ir a Rotación, los gráficos ya están recortados a Tecnología. |
+| Visible (el ojo) | El slicer **se dibuja** en esa página. Puede sincronizar el filtro sin mostrar el control (la página hereda el recorte, pero no ocupa espacio). |
+
+Flujo típico de este informe: ponga los slicers en **Ejecutivo**, márquelos como filtro en Rotación, Ausentismo y Compensación, y deje el ojo activo en esas páginas si quiere que el usuario cambie el recorte sin volver al ejecutivo. Si solo marca el filtro y no el ojo, esas páginas quedan “gobernadas” por Ejecutivo.
+
+Sincronice estos slicers en Ejecutivo, Rotación, Ausentismo y Compensación:
 
 - `DimFecha[Anio]` y `DimFecha[NombreMes]` (no el día: el headcount vive en el día 1).
 - `DimDepartamento[Nombre]`
 - `DimPuesto[FamiliaPuesto]` y `NivelJerarquicoDesc`
 
-**No sincronice fecha en Talento.** `FactHabilidadEmpleado` es el perfil vigente (empleado × habilidad requerida), no una serie mensual. Un slicer de año puede vaciar la página si la evaluación cayó en otro periodo. En esa página use `REMOVEFILTERS(DimFecha)` en las medidas de gap, o desactive la sincronización.
+**No sincronice fecha en Talento.** `FactHabilidadEmpleado` es el perfil vigente (empleado × habilidad requerida), no una serie mensual. Un slicer de año puede vaciar la página si la evaluación cayó en otro periodo. En Vista → Sincronizar segmentaciones, desmarque el filtro de `Anio` / `NombreMes` para la página Talento. Como red de seguridad, `[% gaps (perfil actual)]` usa `REMOVEFILTERS ( DimFecha )` (§3). Departamento y familia de puesto sí pueden sincronizarse con Talento: el gap *sí* se recorta por área.
 
-`DimUbicacion` solo recorta Headcount y Rotación. Si el usuario filtra “Alajuela”, Ausentismo y Talento **no** se reducen. Déjelo como slicer local de Rotación/Compensación, no global.
+`DimUbicacion` solo recorta Headcount y Rotación. Si el usuario filtra “Alajuela”, Ausentismo y Talento **no** se reducen (no hay `UbicacionKey` en esos hechos). Déjelo como slicer **local** de Rotación y Compensación: no marque su casilla de filtro en las demás páginas.
+
+Slicers temáticos (`CriticaDesc`, `EvitableDesc`, `ImpactoProdDesc`, `EstadoBanda`, etc.) también son locales: no tiene sentido llevar “skill crítica” a la página de ausentismo.
 
 ### 2.5 Lo que el Data Mart no tiene
 
@@ -846,7 +859,7 @@ Cierre con el límite del modelo: capacitaciones y desempeño siguen en el OLTP;
 2. Relaciones de la tabla §2.1; marcar `DimFecha`.
 3. Ocultar claves; columnas nativas + calculadas de §2.3; Ordenar por columna (§2.3.3).
 4. Tabla `_Medidas` (§3.1–3.4): 42 medidas en 6 carpetas; no cree medidas extra por depto o tipo.
-5. Cinco páginas según el mapa §3.3; slicers sincronizados salvo fecha en Talento y ubicación global.
+5. Cinco páginas según el mapa §3.3; Vista → Sincronizar segmentaciones (§2.4): fecha/depto/familia en Ejecutivo + Rotación + Ausentismo + Compensación; no sincronice fecha en Talento ni ubicación en todo el informe.
 6. Formato CRC / % ; tooltips con grano (“una barra = una salida”, “una celda = días de ausencia en el mes”).
 7. Panel de formato: título que **afirma** el hallazgo (“Tecnología concentra el déficit de skills críticos”), no el nombre de la tabla.
 8. En la memoria: un `.pbix`, modelo Import sobre `HR_DataMart`, tasas con `DIVIDE` y headcount promedio mensual.
