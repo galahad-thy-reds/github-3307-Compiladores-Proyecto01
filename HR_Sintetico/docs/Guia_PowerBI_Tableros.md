@@ -423,7 +423,7 @@ No diseñe KPIs de **capacitaciones**, **evaluaciones de desempeño** ni **histo
 
 Todas las medidas del `.pbix` viven en **una sola tabla** `_Medidas`. Los hechos no deben mostrar medidas sueltas en el panel: el estudiante (y el jurado) ven un único catálogo.
 
-Cree primero la tabla, luego las medidas **en el orden de las carpetas** (las tasas llaman a las aditivas). El §4 no introduce DAX nuevo: solo cita estos nombres.
+Cree primero la tabla, luego las medidas **en el orden del catálogo §3.2** (cada ficha trae carpeta, formato y expresión). El §3.3 dice en qué visual se usa; el §4 no introduce DAX nuevo.
 
 ### 3.1 Cómo crear la tabla
 
@@ -431,59 +431,373 @@ Cree primero la tabla, luego las medidas **en el orden de las carpetas** (las ta
 2. Nombre de tabla: `_Medidas`. Una columna `_` con el valor `0`. Cargar.
 3. En Vista de modelo: clic derecho en `_` → **Ocultar**.
 4. Clic derecho en `_Medidas` → **Nueva medida** (no “nueva columna”).
-5. Tras crear cada medida: Vista de modelo → panel Propiedades → **Carpeta para mostrar** (valores exactos de §3.2) → **Formato**.
+5. Tras crear cada medida: Vista de modelo → panel Propiedades → **Carpeta para mostrar** (`00 Auxiliar`, `01 Headcount`, `02 Rotación`, `03 Ausentismo`, `04 Talento`, `05 Compensación`) → **Formato** de la ficha §3.2.
 6. No oculte la tabla `_Medidas`: es el punto de entrada del modelo.
 
 No cree una medida por departamento, por tipo de ausencia ni por mes. El eje o el slicer de la dimensión ya recorta el contexto.
 
 ### 3.2 Catálogo
 
-| # | Medida | Carpeta | Formato | Qué es |
-|---|--------|---------|---------|--------|
-| 1 | `Días laborables mes` | 00 Auxiliar | Entero | Constante 22; hipótesis de la tasa de ausentismo |
-| 2 | `Ultimo AnioMes` | 00 Auxiliar | Texto | Último `yyyy-MM` con headcount activo en el filtro |
-| 3 | `Headcount mes` | 01 Headcount | Entero | Activos del contexto; a grano año es la **suma** de snapshots |
-| 4 | `Headcount promedio` | 01 Headcount | Entero (1 dec. opcional) | Promedio de `[Headcount mes]` por `AnioMes` |
-| 5 | `Headcount actual` | 01 Headcount | Entero | `[Headcount mes]` del `[Ultimo AnioMes]` |
-| 6 | `Salidas` | 02 Rotación | Entero | `SUM ( ContadorSalida )` |
-| 7 | `Salidas evitables` | 02 Rotación | Entero | Salidas con `EsEvitable` |
-| 8 | `Tasa rotación %` | 02 Rotación | % 1 dec. | `[Salidas] / [Headcount promedio]` |
-| 9 | `% salidas evitables` | 02 Rotación | % 1 dec. | `[Salidas evitables] / [Salidas]` |
-| 10 | `Antigüedad media al salir` | 02 Rotación | Decimal 1 | Meses al salir |
-| 11 | `Salario al salir promedio` | 02 Rotación | CRC | CRC al momento de la baja |
-| 12 | `Eventos ausencia` | 03 Ausentismo | Entero | `SUM ( ContadorEvento )` |
-| 13 | `Días ausencia` | 03 Ausentismo | Decimal 1 | `SUM ( DiasLaborales )` |
-| 14 | `Días impacto productividad` | 03 Ausentismo | Decimal 1 | Días con `AfectaProductividad` |
-| 15 | `Tasa ausentismo %` | 03 Ausentismo | % 1 dec. | Días / (HC promedio × 22) |
-| 16 | `% días con impacto productividad` | 03 Ausentismo | % 1 dec. | Impacto / días |
-| 17 | `Requisitos skill` | 04 Talento | Entero | Filas empleado × skill requerida |
-| 18 | `Requisitos críticos` | 04 Talento | Entero | Requisitos con `IsCritical` |
-| 19 | `Gaps` | 04 Talento | Entero | `SUM ( TieneGap )` |
-| 20 | `Gaps críticos` | 04 Talento | Entero | Gaps en skills críticas |
-| 21 | `% gaps` | 04 Talento | % 1 dec. | Gaps / requisitos |
-| 22 | `% gaps críticos` | 04 Talento | % 1 dec. | Gaps críticos / requisitos críticos |
-| 23 | `% gaps (perfil actual)` | 04 Talento | % 1 dec. | `[% gaps]` ignorando `DimFecha` |
-| 24 | `Nivel actual promedio` | 04 Talento | Decimal 1 | 1–5; ignora no evaluados |
-| 25 | `Nivel requerido promedio` | 04 Talento | Decimal 1 | 1–5 del puesto |
-| 26 | `Diferencia de niveles promedio` | 04 Talento | Decimal 1 | Requerido − actual |
-| 27 | `Salario promedio` | 05 Compensación | CRC | `AVERAGE ( Salario )` en el filtro |
-| 28 | `Salario promedio actual` | 05 Compensación | CRC | Promedio del último mes del filtro |
-| 29 | `Salario mín` | 05 Compensación | CRC | Mínimo de la práctica |
-| 30 | `Salario máx` | 05 Compensación | CRC | Máximo de la práctica |
-| 31 | `Masa salarial mes` | 05 Compensación | CRC | Suma de salarios activos del contexto |
-| 32 | `Masa salarial promedio` | 05 Compensación | CRC | Promedio de masas mensuales |
-| 33 | `Masa salarial actual` | 05 Compensación | CRC | Masa del último mes |
-| 34 | `Gap género %` | 05 Compensación | % 1 dec. | (Prom M − Prom F) / Prom M |
-| 35 | `Gap género % actual` | 05 Compensación | % 1 dec. | Igual, sobre `[Salario promedio actual]` |
-| 36 | `Posición en banda promedio` | 05 Compensación | % 1 dec. | Media de `PosicionEnBandaPct` |
-| 37 | `% bajo banda` | 05 Compensación | % 1 dec. | Headcount bajo banda / headcount |
-| 38 | `% sobre banda` | 05 Compensación | % 1 dec. | Análogo |
-| 39 | `% bajo banda actual` | 05 Compensación | % 1 dec. | `[% bajo banda]` del último mes |
-| 40 | `Banda mínima` | 05 Compensación | CRC | `MIN ( SalarioMinimo )` de la política |
-| 41 | `Banda media` | 05 Compensación | CRC | `MIN ( SalarioMedio )` (constante por grado) |
-| 42 | `Banda máxima` | 05 Compensación | CRC | `MIN ( SalarioMaximo )` |
+Cree las 42 medidas **en este orden** (#1…#42): las tasas llaman a las aditivas. En Vista de modelo, carpeta y formato son los de cada ficha. CRC = `₡#,0`; % = `0.0%`; enteros = `#,0`; un decimal = `#,0.0`.
 
-Las 1–5 y 17–18, 31 son **de apoyo**: el usuario las ve en tooltips o las usan otras medidas. No clone variantes por depto.
+Las #1–#5, #17–#18 y #31 son de apoyo (tooltip u otras medidas). No clone variantes por departamento: el slicer recorta el contexto.
+
+Índice: **00** #1–#2 · **01** #3–#5 · **02** #6–#11 · **03** #12–#16 · **04** #17–#26 · **05** #27–#42. Uso por visual en §3.3.
+
+#### 00 Auxiliar
+
+**1. `Días laborables mes`** — Entero. Constante 22: días laborales/mes supuestos en la tasa de ausentismo. Documente la hipótesis en el glosario; no la arrastre a un visual.
+
+```dax
+Días laborables mes = 22
+```
+
+**2. `Ultimo AnioMes`** — Texto. Último `yyyy-MM` con headcount activo en el filtro. Pie de Compensación y base de las variantes `* actual`.
+
+```dax
+Ultimo AnioMes =
+CALCULATE (
+    MAX ( DimFecha[AnioMes] ),
+    FactHeadcountMensual[EsActivo] = TRUE ()
+)
+```
+
+#### 01 Headcount
+
+`FactHeadcountMensual` es empleado × mes. `SUM ( EsActivo )` en un año cuenta ~12 veces a cada persona. A grano mes, #3 y #4 coinciden. En tarjetas ejecutivas y denominadores de tasa use **#4**.
+
+**3. `Headcount mes`** — Entero. Activos del contexto (a grano año es la suma de snapshots).
+
+```dax
+Headcount mes =
+CALCULATE (
+    SUM ( FactHeadcountMensual[EsActivo] ),
+    FactHeadcountMensual[EsActivo] = TRUE ()
+)
+```
+
+**4. `Headcount promedio`** — Entero (1 decimal opcional). Promedio de #3 por `AnioMes`.
+
+```dax
+Headcount promedio =
+AVERAGEX (
+    VALUES ( DimFecha[AnioMes] ),
+    [Headcount mes]
+)
+```
+
+**5. `Headcount actual`** — Entero. #3 recortado al #2.
+
+```dax
+Headcount actual =
+VAR Periodo = [Ultimo AnioMes]
+RETURN
+    CALCULATE (
+        [Headcount mes],
+        FILTER ( ALL ( DimFecha[AnioMes] ), DimFecha[AnioMes] = Periodo )
+    )
+```
+
+#### 02 Rotación
+
+**6. `Salidas`** — Entero. Una fila del hecho = una salida.
+
+```dax
+Salidas = SUM ( FactRotacion[ContadorSalida] )
+```
+
+**7. `Salidas evitables`** — Entero. Subconjunto con `EsEvitable`. Tooltip de #9; no hace falta tarjeta propia.
+
+```dax
+Salidas evitables =
+CALCULATE ( [Salidas], DimMotivoSalida[EsEvitable] = TRUE () )
+```
+
+**8. `Tasa rotación %`** — % 1 dec. Denominador = plantilla promedio, no la suma anual de snapshots.
+
+```dax
+Tasa rotación % =
+DIVIDE ( [Salidas], [Headcount promedio] )
+```
+
+**9. `% salidas evitables`** — % 1 dec.
+
+```dax
+% salidas evitables =
+DIVIDE ( [Salidas evitables], [Salidas] )
+```
+
+**10. `Antigüedad media al salir`** — Decimal 1. Meses desde contratación hasta la baja.
+
+```dax
+Antigüedad media al salir =
+AVERAGE ( FactRotacion[AntiguedadMeses] )
+```
+
+**11. `Salario al salir promedio`** — CRC.
+
+```dax
+Salario al salir promedio =
+AVERAGE ( FactRotacion[SalarioAlSalir] )
+```
+
+#### 03 Ausentismo
+
+**12. `Eventos ausencia`** — Entero.
+
+```dax
+Eventos ausencia = SUM ( FactAusentismo[ContadorEvento] )
+```
+
+**13. `Días ausencia`** — Decimal 1.
+
+```dax
+Días ausencia = SUM ( FactAusentismo[DiasLaborales] )
+```
+
+**14. `Días impacto productividad`** — Decimal 1. Tipos con `AfectaProductividad` (enfermedad, vacaciones, etc.; no capacitación externa ni teletrabajo excepcional).
+
+```dax
+Días impacto productividad =
+CALCULATE ( [Días ausencia], DimTipoAusencia[AfectaProductividad] = TRUE () )
+```
+
+**15. `Tasa ausentismo %`** — % 1 dec. Capacidad ≈ plantilla promedio × #1.
+
+```dax
+Tasa ausentismo % =
+DIVIDE ( [Días ausencia], [Headcount promedio] * [Días laborables mes] )
+```
+
+**16. `% días con impacto productividad`** — % 1 dec.
+
+```dax
+% días con impacto productividad =
+DIVIDE ( [Días impacto productividad], [Días ausencia] )
+```
+
+#### 04 Talento
+
+**17. `Requisitos skill`** — Entero. Filas empleado × habilidad requerida por el puesto.
+
+```dax
+Requisitos skill = COUNTROWS ( FactHabilidadEmpleado )
+```
+
+**18. `Requisitos críticos`** — Entero. Denominador de #22.
+
+```dax
+Requisitos críticos =
+CALCULATE ( [Requisitos skill], DimHabilidad[IsCritical] = TRUE () )
+```
+
+**19. `Gaps`** — Entero. `TieneGap` ya es 1/0 en el mart.
+
+```dax
+Gaps = SUM ( FactHabilidadEmpleado[TieneGap] )
+```
+
+**20. `Gaps críticos`** — Entero.
+
+```dax
+Gaps críticos =
+CALCULATE ( [Gaps], DimHabilidad[IsCritical] = TRUE () )
+```
+
+**21. `% gaps`** — % 1 dec.
+
+```dax
+% gaps =
+DIVIDE ( [Gaps], [Requisitos skill] )
+```
+
+**22. `% gaps críticos`** — % 1 dec.
+
+```dax
+% gaps críticos =
+DIVIDE ( [Gaps críticos], [Requisitos críticos] )
+```
+
+**23. `% gaps (perfil actual)`** — % 1 dec. Tarjetas de Talento si el slicer de fecha del informe siguiera activo (§2.4).
+
+```dax
+% gaps (perfil actual) =
+CALCULATE ( [% gaps], REMOVEFILTERS ( DimFecha ) )
+```
+
+**24. `Nivel actual promedio`** — Decimal 1. `AVERAGE` ignora `NivelActual` nulo (no evaluado).
+
+```dax
+Nivel actual promedio =
+AVERAGE ( FactHabilidadEmpleado[NivelActual] )
+```
+
+**25. `Nivel requerido promedio`** — Decimal 1.
+
+```dax
+Nivel requerido promedio =
+AVERAGE ( FactHabilidadEmpleado[NivelRequerido] )
+```
+
+**26. `Diferencia de niveles promedio`** — Decimal 1. Requerido − actual. Drill-through.
+
+```dax
+Diferencia de niveles promedio =
+AVERAGE ( FactHabilidadEmpleado[DiferenciaNiveles] )
+```
+
+#### 05 Compensación
+
+**27. `Salario promedio`** — CRC. Respeta el slicer de mes (si el mes es “todo el año”, mezcla snapshots).
+
+```dax
+Salario promedio =
+CALCULATE (
+    AVERAGE ( FactHeadcountMensual[Salario] ),
+    FactHeadcountMensual[EsActivo] = TRUE ()
+)
+```
+
+**28. `Salario promedio actual`** — CRC. Foto del #2. Tarjetas de Compensación.
+
+```dax
+Salario promedio actual =
+VAR Periodo = [Ultimo AnioMes]
+RETURN
+    CALCULATE (
+        [Salario promedio],
+        FILTER ( ALL ( DimFecha[AnioMes] ), DimFecha[AnioMes] = Periodo )
+    )
+```
+
+**29. `Salario mín`** — CRC. Mínimo de la *práctica* (hecho), no de la política.
+
+```dax
+Salario mín =
+CALCULATE (
+    MIN ( FactHeadcountMensual[Salario] ),
+    FactHeadcountMensual[EsActivo] = TRUE ()
+)
+```
+
+**30. `Salario máx`** — CRC. Máximo de la práctica.
+
+```dax
+Salario máx =
+CALCULATE (
+    MAX ( FactHeadcountMensual[Salario] ),
+    FactHeadcountMensual[EsActivo] = TRUE ()
+)
+```
+
+**31. `Masa salarial mes`** — CRC. Suma de salarios activos del contexto. Apoyo de #32 y #33.
+
+```dax
+Masa salarial mes =
+CALCULATE (
+    SUM ( FactHeadcountMensual[Salario] ),
+    FactHeadcountMensual[EsActivo] = TRUE ()
+)
+```
+
+**32. `Masa salarial promedio`** — CRC. Promedio de masas mensuales (no sume 12 meses).
+
+```dax
+Masa salarial promedio =
+AVERAGEX ( VALUES ( DimFecha[AnioMes] ), [Masa salarial mes] )
+```
+
+**33. `Masa salarial actual`** — CRC. Masa del #2.
+
+```dax
+Masa salarial actual =
+VAR Periodo = [Ultimo AnioMes]
+RETURN
+    CALCULATE (
+        [Masa salarial mes],
+        FILTER ( ALL ( DimFecha[AnioMes] ), DimFecha[AnioMes] = Periodo )
+    )
+```
+
+**34. `Gap género %`** — % 1 dec. (Promedio M − promedio F) / promedio M, en el filtro vigente.
+
+```dax
+Gap género % =
+VAR PromM = CALCULATE ( [Salario promedio], DimEmpleado[Genero] = "M" )
+VAR PromF = CALCULATE ( [Salario promedio], DimEmpleado[Genero] = "F" )
+RETURN
+    DIVIDE ( PromM - PromF, PromM )
+```
+
+**35. `Gap género % actual`** — % 1 dec. Igual, sobre #28.
+
+```dax
+Gap género % actual =
+VAR PromM = CALCULATE ( [Salario promedio actual], DimEmpleado[Genero] = "M" )
+VAR PromF = CALCULATE ( [Salario promedio actual], DimEmpleado[Genero] = "F" )
+RETURN
+    DIVIDE ( PromM - PromF, PromM )
+```
+
+**36. `Posición en banda promedio`** — % 1 dec. Media de la columna calculada `PosicionEnBandaPct` (§2.3.2). Formatee esa columna como %.
+
+```dax
+Posición en banda promedio =
+CALCULATE (
+    AVERAGE ( FactHeadcountMensual[PosicionEnBandaPct] ),
+    FactHeadcountMensual[EsActivo] = TRUE ()
+)
+```
+
+**37. `% bajo banda`** — % 1 dec. Usa `EstadoBanda` (§2.3.2).
+
+```dax
+% bajo banda =
+DIVIDE (
+    CALCULATE ( [Headcount mes], FactHeadcountMensual[EstadoBanda] = "Bajo banda" ),
+    [Headcount mes]
+)
+```
+
+**38. `% sobre banda`** — % 1 dec.
+
+```dax
+% sobre banda =
+DIVIDE (
+    CALCULATE ( [Headcount mes], FactHeadcountMensual[EstadoBanda] = "Sobre banda" ),
+    [Headcount mes]
+)
+```
+
+**39. `% bajo banda actual`** — % 1 dec. #37 en el #2.
+
+```dax
+% bajo banda actual =
+VAR Periodo = [Ultimo AnioMes]
+RETURN
+    CALCULATE (
+        [% bajo banda],
+        FILTER ( ALL ( DimFecha[AnioMes] ), DimFecha[AnioMes] = Periodo )
+    )
+```
+
+**40. `Banda mínima`** — CRC. Política (`DimEscalaSalarial`), no la práctica. `MIN` es correcto: por grado el importe es constante (G3 = 950 000 CRC).
+
+```dax
+Banda mínima = MIN ( DimEscalaSalarial[SalarioMinimo] )
+```
+
+**41. `Banda media`** — CRC. Política. G3 = 1 200 000 CRC.
+
+```dax
+Banda media = MIN ( DimEscalaSalarial[SalarioMedio] )
+```
+
+**42. `Banda máxima`** — CRC. Política. G3 = 1 450 000 CRC.
+
+```dax
+Banda máxima = MIN ( DimEscalaSalarial[SalarioMaximo] )
+```
 
 ### 3.3 Dónde se usa cada medida
 
@@ -565,208 +879,9 @@ Para “solo enfermedad”: filtre el visual con `DimTipoAusencia[Nombre] = "Inc
 
 En barras/matriz/histograma de esta página, si el slicer de mes está en “todo el año”, `[Salario promedio]` mezcla snapshots. Las **tarjetas** usan las variantes `* actual`. Alternativa: filtre la página al `[Ultimo AnioMes]` y entonces `[Salario promedio]` = `[Salario promedio actual]`.
 
-### 3.4 Expresiones
+### 3.4 Orden de creación
 
-Cree las medidas en este orden. CRC = `₡#,0`; % = `0.0%`.
-
-#### 00 Auxiliar
-
-```dax
-Días laborables mes = 22
-
-Ultimo AnioMes =
-CALCULATE (
-    MAX ( DimFecha[AnioMes] ),
-    FactHeadcountMensual[EsActivo] = TRUE ()
-)
-```
-
-#### 01 Headcount
-
-`FactHeadcountMensual` es empleado × mes. `SUM ( EsActivo )` en un año cuenta ~12 veces a cada persona. A grano mes, `[Headcount mes]` y `[Headcount promedio]` coinciden. En tarjetas ejecutivas y denominadores de tasa use **promedio**.
-
-```dax
-Headcount mes =
-CALCULATE (
-    SUM ( FactHeadcountMensual[EsActivo] ),
-    FactHeadcountMensual[EsActivo] = TRUE ()
-)
-
-Headcount promedio =
-AVERAGEX (
-    VALUES ( DimFecha[AnioMes] ),
-    [Headcount mes]
-)
-
-Headcount actual =
-VAR Periodo = [Ultimo AnioMes]
-RETURN
-    CALCULATE (
-        [Headcount mes],
-        FILTER ( ALL ( DimFecha[AnioMes] ), DimFecha[AnioMes] = Periodo )
-    )
-```
-
-#### 02 Rotación
-
-```dax
-Salidas = SUM ( FactRotacion[ContadorSalida] )
-
-Salidas evitables =
-CALCULATE ( [Salidas], DimMotivoSalida[EsEvitable] = TRUE () )
-
-Tasa rotación % =
-DIVIDE ( [Salidas], [Headcount promedio] )
-
-% salidas evitables =
-DIVIDE ( [Salidas evitables], [Salidas] )
-
-Antigüedad media al salir =
-AVERAGE ( FactRotacion[AntiguedadMeses] )
-
-Salario al salir promedio =
-AVERAGE ( FactRotacion[SalarioAlSalir] )
-```
-
-#### 03 Ausentismo
-
-```dax
-Eventos ausencia = SUM ( FactAusentismo[ContadorEvento] )
-
-Días ausencia = SUM ( FactAusentismo[DiasLaborales] )
-
-Días impacto productividad =
-CALCULATE ( [Días ausencia], DimTipoAusencia[AfectaProductividad] = TRUE () )
-
-Tasa ausentismo % =
-DIVIDE ( [Días ausencia], [Headcount promedio] * [Días laborables mes] )
-
-% días con impacto productividad =
-DIVIDE ( [Días impacto productividad], [Días ausencia] )
-```
-
-#### 04 Talento
-
-```dax
-Requisitos skill = COUNTROWS ( FactHabilidadEmpleado )
-
-Requisitos críticos =
-CALCULATE ( [Requisitos skill], DimHabilidad[IsCritical] = TRUE () )
-
-Gaps = SUM ( FactHabilidadEmpleado[TieneGap] )
-
-Gaps críticos =
-CALCULATE ( [Gaps], DimHabilidad[IsCritical] = TRUE () )
-
-% gaps =
-DIVIDE ( [Gaps], [Requisitos skill] )
-
-% gaps críticos =
-DIVIDE ( [Gaps críticos], [Requisitos críticos] )
-
-% gaps (perfil actual) =
-CALCULATE ( [% gaps], REMOVEFILTERS ( DimFecha ) )
-
-Nivel actual promedio =
-AVERAGE ( FactHabilidadEmpleado[NivelActual] )
-
-Nivel requerido promedio =
-AVERAGE ( FactHabilidadEmpleado[NivelRequerido] )
-
-Diferencia de niveles promedio =
-AVERAGE ( FactHabilidadEmpleado[DiferenciaNiveles] )
-```
-
-#### 05 Compensación
-
-```dax
-Salario promedio =
-CALCULATE (
-    AVERAGE ( FactHeadcountMensual[Salario] ),
-    FactHeadcountMensual[EsActivo] = TRUE ()
-)
-
-Salario promedio actual =
-VAR Periodo = [Ultimo AnioMes]
-RETURN
-    CALCULATE (
-        [Salario promedio],
-        FILTER ( ALL ( DimFecha[AnioMes] ), DimFecha[AnioMes] = Periodo )
-    )
-
-Salario mín =
-CALCULATE (
-    MIN ( FactHeadcountMensual[Salario] ),
-    FactHeadcountMensual[EsActivo] = TRUE ()
-)
-
-Salario máx =
-CALCULATE (
-    MAX ( FactHeadcountMensual[Salario] ),
-    FactHeadcountMensual[EsActivo] = TRUE ()
-)
-
-Masa salarial mes =
-CALCULATE (
-    SUM ( FactHeadcountMensual[Salario] ),
-    FactHeadcountMensual[EsActivo] = TRUE ()
-)
-
-Masa salarial promedio =
-AVERAGEX ( VALUES ( DimFecha[AnioMes] ), [Masa salarial mes] )
-
-Masa salarial actual =
-VAR Periodo = [Ultimo AnioMes]
-RETURN
-    CALCULATE (
-        [Masa salarial mes],
-        FILTER ( ALL ( DimFecha[AnioMes] ), DimFecha[AnioMes] = Periodo )
-    )
-
-Gap género % =
-VAR PromM = CALCULATE ( [Salario promedio], DimEmpleado[Genero] = "M" )
-VAR PromF = CALCULATE ( [Salario promedio], DimEmpleado[Genero] = "F" )
-RETURN
-    DIVIDE ( PromM - PromF, PromM )
-
-Gap género % actual =
-VAR PromM = CALCULATE ( [Salario promedio actual], DimEmpleado[Genero] = "M" )
-VAR PromF = CALCULATE ( [Salario promedio actual], DimEmpleado[Genero] = "F" )
-RETURN
-    DIVIDE ( PromM - PromF, PromM )
-
-Posición en banda promedio =
-CALCULATE (
-    AVERAGE ( FactHeadcountMensual[PosicionEnBandaPct] ),
-    FactHeadcountMensual[EsActivo] = TRUE ()
-)
-
-% bajo banda =
-DIVIDE (
-    CALCULATE ( [Headcount mes], FactHeadcountMensual[EstadoBanda] = "Bajo banda" ),
-    [Headcount mes]
-)
-
-% sobre banda =
-DIVIDE (
-    CALCULATE ( [Headcount mes], FactHeadcountMensual[EstadoBanda] = "Sobre banda" ),
-    [Headcount mes]
-)
-
-% bajo banda actual =
-VAR Periodo = [Ultimo AnioMes]
-RETURN
-    CALCULATE (
-        [% bajo banda],
-        FILTER ( ALL ( DimFecha[AnioMes] ), DimFecha[AnioMes] = Periodo )
-    )
-
-Banda mínima = MIN ( DimEscalaSalarial[SalarioMinimo] )
-Banda media = MIN ( DimEscalaSalarial[SalarioMedio] )
-Banda máxima = MIN ( DimEscalaSalarial[SalarioMaximo] )
-```
-
-`MIN` de la política es correcto: por grado los tres importes son constantes. En un visual filtrado a G3 coinciden con 950 000 / 1 200 000 / 1 450 000 CRC.
+Las expresiones están en el catálogo §3.2. Créelas de #1 a #42: `#8 Tasa rotación %` necesita `#6` y `#4`; las variantes `* actual` necesitan `#2 Ultimo AnioMes`; `#37` necesita la columna `EstadoBanda` de §2.3.2.
 
 ### 3.5 Convenciones
 
@@ -780,7 +895,7 @@ Banda máxima = MIN ( DimEscalaSalarial[SalarioMaximo] )
 
 ## 4. Páginas y visualizaciones
 
-Las medidas se toman **solo** de `_Medidas` (§3.3 tiene el mapa visual por visual). Las columnas, de §2.3. Este apartado describe la tesis de cada página, no vuelve a definir DAX.
+Las medidas se toman **solo** de `_Medidas` (expresión en §3.2; mapa visual en §3.3). Las columnas, de §2.3. Este apartado describe la tesis de cada página, no vuelve a definir DAX.
 
 Filtros de página comunes (salvo Talento): `EsActivo = 1` **solo** en visuals que lean `FactHeadcountMensual`. No lo aplique al informe entero.
 
@@ -858,7 +973,7 @@ Cierre con el límite del modelo: capacitaciones y desempeño siguen en el OLTP;
 1. Import de las 9 dimensiones y 4 hechos; renombre quitar esquema `dm`.
 2. Relaciones de la tabla §2.1; marcar `DimFecha`.
 3. Ocultar claves; columnas nativas + calculadas de §2.3; Ordenar por columna (§2.3.3).
-4. Tabla `_Medidas` (§3.1–3.4): 42 medidas en 6 carpetas; no cree medidas extra por depto o tipo.
+4. Tabla `_Medidas` (§3.1–3.2): 42 medidas con su DAX; no cree medidas extra por depto o tipo.
 5. Cinco páginas según el mapa §3.3; Vista → Sincronizar segmentaciones (§2.4): fecha/depto/familia en Ejecutivo + Rotación + Ausentismo + Compensación; no sincronice fecha en Talento ni ubicación en todo el informe.
 6. Formato CRC / % ; tooltips con grano (“una barra = una salida”, “una celda = días de ausencia en el mes”).
 7. Panel de formato: título que **afirma** el hallazgo (“Tecnología concentra el déficit de skills críticos”), no el nombre de la tabla.
