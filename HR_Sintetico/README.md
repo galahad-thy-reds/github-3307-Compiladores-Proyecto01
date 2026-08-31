@@ -14,7 +14,7 @@ Stack objetivo: **SQL Server 2025**, **SSIS**, **Power BI**, metodología **Ralp
 | `02_Seed/` | Catálogos + ~180 empleados con historial, ausencias, salidas, habilidades |
 | `03_Procedures/` | SPs para generar cambios incrementales + vistas de negocio |
 | `04_DataMart/` | `HR_Staging` + `HR_DataMart` (modelo estrella Kimball) |
-| `docs/` | Arquitectura, diccionario de datos, guía SSIS/Power BI y validaciones |
+| `docs/` | Arquitectura, diccionario de datos, guía SSIS, tableros Power BI y validaciones |
 
 ---
 
@@ -126,7 +126,7 @@ Hechos sugeridos:
 | `FactAusentismo` | Ausentismo y productividad |
 | `FactHeadcountMensual` | Compensación + denominadores de tasas |
 
-Detalle en `docs/Arquitectura_Kimball.md` y `docs/Guia_SSIS_PowerBI.md` (este último separa **carga inicial vs incremental**, con fases OLTP→Staging y Staging→Data Mart para dimensiones y hechos).
+Detalle en `docs/Arquitectura_Kimball.md`, `docs/Guia_SSIS_PowerBI.md` (carga inicial vs incremental) y `docs/Guia_PowerBI_Tableros.md` (KPIs, visuales y un solo `.pbix`).
 
 ---
 
@@ -147,4 +147,4 @@ Empresa ficticia costarricense con ~180 colaboradores en 8 departamentos. El dep
 2. ETL inicial e incremental con SSIS
 3. Staging Area
 4. Data Mart dimensional (Kimball)
-5. Visualización en Power BI respondiendo las 4 preguntas
+5. Visualización en Power BI respondiendo las 4 preguntas (`docs/Guia_PowerBI_Tableros.md`: un `.pbix`, Ejecutivo + 4 páginas temáticas)

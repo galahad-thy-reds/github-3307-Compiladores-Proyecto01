@@ -11,7 +11,7 @@ Abra la carpeta [`HR_Sintetico/`](./HR_Sintetico/README.md) y siga la guía de i
 - OLTP sintético (`HR_Sintetico`) con empleados, habilidades, ausencias, salidas y compensación
 - Stored procedures para generar cambios incrementales (pruebas de ETL)
 - Staging Area (`HR_Staging`) y Data Mart dimensional (`HR_DataMart`)
-- Documentación de arquitectura Kimball, SSIS y Power BI
+- Documentación de arquitectura Kimball, SSIS y tableros Power BI
 
 ### Stack
 

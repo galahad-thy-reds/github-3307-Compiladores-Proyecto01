@@ -613,4 +613,5 @@ El paso intermedio es `HR_Staging` (`stg.*`): copia casi 1:1 + `LoadBatchID`, `L
 1. Cite `HR_Sintetico` como **sistema origen / OLTP sintético**.  
 2. Cite `HR_DataMart` como **data mart dimensional** alineado a las 4 preguntas.  
 3. Para el flujo ETL, complemente con `Guia_SSIS_PowerBI.md` y `Arquitectura_Kimball.md`.  
-4. Para validar datos cargados, use `03_ConsultasValidacion.sql` y las vistas `hr.vw_*`.
+4. Para tableros, KPIs y DAX sobre el mart, use `Guia_PowerBI_Tableros.md`.  
+5. Para validar datos cargados, use `03_ConsultasValidacion.sql` y las vistas `hr.vw_*`.
