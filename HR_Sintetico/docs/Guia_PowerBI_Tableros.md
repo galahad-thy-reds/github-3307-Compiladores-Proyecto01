@@ -127,7 +127,7 @@ No cree columnas calculadas que solo copien un nativo (`DepartamentoNombre = REL
 
 #### 2.3.2 Columnas calculadas (expresiones)
 
-Cree **en este orden**: primero las de dimensión (no dependen de hechos), luego `PosicionEnBandaPct` y `EstadoBanda` (usan `RELATED`), luego buckets y órdenes.
+Cree **en este orden**: primero las de dimensión (no dependen de hechos), luego `PosicionEnBandaPct` y `EstadoBanda` (usan `RELATED`), luego buckets y órdenes. Cada columna de orden debe calcularse de las mismas entradas que el texto, **sin** leer el texto.
 
 **`DimEmpleado[GeneroDesc]`** — matriz de equidad y slicer de Compensación.
 
@@ -289,6 +289,8 @@ DIVIDE (
 
 **`FactHeadcountMensual[EstadoBanda]`** + **`EstadoBandaOrden`** — leyenda 100 % apilada y filtro de `[% bajo banda]`.
 
+`EstadoBandaOrden` **no** puede leer `EstadoBanda`. Si lo hace, al aplicar Ordenar por columna Power BI cierra el ciclo (`EstadoBanda` → `EstadoBandaOrden` → `EstadoBanda`) y muestra *A circular dependency was detected*. Calcule el entero con las mismas entradas (salario vs min/máx).
+
 ```dax
 EstadoBanda =
 VAR Salario = FactHeadcountMensual[Salario]
@@ -303,14 +305,19 @@ RETURN
     )
 
 EstadoBandaOrden =
-SWITCH (
-    FactHeadcountMensual[EstadoBanda],
-    "Bajo banda", 1,
-    "Dentro de banda", 2,
-    "Sobre banda", 3,
-    0
-)
+VAR Salario = FactHeadcountMensual[Salario]
+VAR Minimo = RELATED ( DimEscalaSalarial[SalarioMinimo] )
+VAR Maximo = RELATED ( DimEscalaSalarial[SalarioMaximo] )
+RETURN
+    SWITCH (
+        TRUE (),
+        Salario < Minimo, 1,
+        Salario > Maximo, 3,
+        2
+    )
 ```
+
+Si ya creó `EstadoBandaOrden` como `SWITCH ( FactHeadcountMensual[EstadoBanda], ... )`, edite esa expresión **antes** de volver a Ordenar por columna. No hace falta borrar la columna.
 
 **`FactHeadcountMensual[PosicionEnBandaBucket]`** + **`PosicionEnBandaBucketOrden`** — eje del histograma (el visual de columnas no agrupa bien un % continuo).
 
@@ -361,6 +368,8 @@ RETURN
 | `NivelActualDesc` / `NivelRequeridoDesc` | `FactHabilidadEmpleado` | `NivelActual` / `NivelRequerido` | no |
 
 `AnioMes` (`yyyy-MM`) no necesita columna de orden.
+
+La columna de orden **no debe referenciar** a la columna que ordena. *Ordenar por columna* añade una dependencia en el motor; si la fórmula ya iba en el otro sentido, Power BI reporta dependencia circular. `RangoAntiguedadOrden` y `PosicionEnBandaBucketOrden` ya salen de `AntiguedadMeses` / `PosicionEnBandaPct`, no del texto visible. No las reescriba como `SWITCH ( [RangoAntiguedad], ... )` ni `SWITCH ( [PosicionEnBandaBucket], ... )`.
 
 #### 2.3.4 Dónde se usa cada calculada
 
