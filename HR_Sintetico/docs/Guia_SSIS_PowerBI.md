@@ -665,7 +665,7 @@ El diseño de tableros, KPIs, DAX y la decisión de **un solo `.pbix`** están e
 - `DimHabilidad` → `FactHabilidadEmpleado`
 - `DimEscalaSalarial` → `FactHeadcountMensual`
 
-`FactHeadcountMensual` es grano empleado×mes: **no** use `SUM(EsActivo)` como denominador anual de rotación. Use el promedio de headcount mensual (`AVERAGEX` sobre `AnioMes`). Detalle y medidas en la guía de tableros.
+`FactHeadcountMensual` es grano empleado×mes: **no** use el conteo de filas del snapshot (ni `SUM` de `EsActivo`, que en Power BI es Boolean y falla) como denominador anual de rotación. Use el promedio de headcount mensual (`AVERAGEX` sobre `AnioMes`). Detalle y medidas en la guía de tableros.
 
 ### Páginas de informe
 

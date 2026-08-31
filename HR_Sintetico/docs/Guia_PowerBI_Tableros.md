@@ -77,7 +77,7 @@ Oculte en el panel de datos: `*Key`, `*BK`, `*ID` de hechos, `HashDiff`, `FechaI
 
 Dos capas:
 
-1. **Nativas del mart** — se usan tal cual (eje, slicer, tooltip o filtro). No les cree una medida `SUM`/`AVERAGE` envolvente: el agregado vive en `_Medidas` (§3).
+1. **Nativas del mart** — se usan tal cual (eje, slicer, tooltip o filtro). El agregado vive en `_Medidas` (§3). Un `BIT` llega como Boolean: no lo ponga en `SUM`.
 2. **Calculadas** — solo cuando el valor es una *etiqueta o bucket* (eje, leyenda, slicer u orden). Bit y códigos (`M`/`F`, `IsCritical`) no se arrastran a un visual de negocio.
 
 Cree las calculadas en DAX (vista Informe → Nueva columna) o en Power Query; DAX es más fácil de citar en la memoria. Después de crearlas, configure **Ordenar por columna** (§2.3.3) y oculte las columnas de orden y las claves (§2.2).
@@ -119,8 +119,8 @@ Los agregados y tasas **no** van aquí: van a `_Medidas` (§3).
 | `FactAusentismo` | `ContadorEvento` | Fuente de `[Eventos ausencia]` | — |
 | `FactHabilidadEmpleado` | `NivelActual`, `NivelRequerido` | Fuente de promedios; tooltip del drill-through | Talento |
 | `FactHabilidadEmpleado` | `DiferenciaNiveles` | Fuente de `[Diferencia de niveles promedio]` | Talento (detalle) |
-| `FactHabilidadEmpleado` | `TieneGap` | Fuente de `[Gaps]`; no slicer (use `GapDesc`) | — |
-| `FactHeadcountMensual` | `EsActivo` | Filtro de visuals de plantilla/salario, no del informe | Compensación, denominadores |
+| `FactHabilidadEmpleado` | `TieneGap` | Boolean en PBI; fuente de `[Gaps]` vía `COUNTROWS`, no `SUM`; slicer = `GapDesc` | — |
+| `FactHeadcountMensual` | `EsActivo` | Boolean en PBI; filtro `= TRUE ()` de plantilla/salario, no `SUM`; no filtro de informe | Compensación, denominadores |
 | `FactHeadcountMensual` | `Salario` | Fuente de medidas salariales; eje Y de la **dispersión** (grano fila) | Compensación |
 
 No cree columnas calculadas que solo copien un nativo (`DepartamentoNombre = RELATED(...)`). El modelo en estrella ya resuelve eso.
@@ -464,14 +464,16 @@ CALCULATE (
 
 #### 01 Headcount
 
-`FactHeadcountMensual` es empleado × mes. `SUM ( EsActivo )` en un año cuenta ~12 veces a cada persona. A grano mes, #3 y #4 coinciden. En tarjetas ejecutivas y denominadores de tasa use **#4**.
+`FactHeadcountMensual` es empleado × mes. Contar filas del snapshot en un año cuenta ~12 veces a cada persona. A grano mes, #3 y #4 coinciden. En tarjetas ejecutivas y denominadores de tasa use **#4**.
+
+En Power BI un `BIT` de SQL llega como **Boolean** (`TRUE`/`FALSE`). `SUM` no acepta Boolean: use `COUNTROWS` con filtro. Lo mismo aplica a `TieneGap` (#19).
 
 **3. `Headcount mes`** — Entero. Activos del contexto (a grano año es la suma de snapshots).
 
 ```dax
 Headcount mes =
 CALCULATE (
-    SUM ( FactHeadcountMensual[EsActivo] ),
+    COUNTROWS ( FactHeadcountMensual ),
     FactHeadcountMensual[EsActivo] = TRUE ()
 )
 ```
@@ -591,10 +593,14 @@ Requisitos críticos =
 CALCULATE ( [Requisitos skill], DimHabilidad[IsCritical] = TRUE () )
 ```
 
-**19. `Gaps`** — Entero. `TieneGap` ya es 1/0 en el mart.
+**19. `Gaps`** — Entero. `TieneGap` es Boolean en Power BI: no use `SUM`.
 
 ```dax
-Gaps = SUM ( FactHabilidadEmpleado[TieneGap] )
+Gaps =
+CALCULATE (
+    COUNTROWS ( FactHabilidadEmpleado ),
+    FactHabilidadEmpleado[TieneGap] = TRUE ()
+)
 ```
 
 **20. `Gaps críticos`** — Entero.
@@ -886,9 +892,10 @@ Las expresiones están en el catálogo §3.2. Créelas de #1 a #42: `#8 Tasa rot
 ### 3.5 Convenciones
 
 - `DIVIDE` en todas las tasas (denominador 0 → en blanco, no error).
+- Un `BIT` de SQL (`EsActivo`, `TieneGap`, `EsEvitable`, `AfectaProductividad`, `IsCritical`) llega como Boolean. **No** use `SUM` sobre esas columnas (`The function SUM cannot work with values of type Boolean`). Cuente filas con `COUNTROWS` y un filtro `= TRUE ()`, o filtre una medida ya numérica (`CALCULATE ( [Salidas], DimMotivoSalida[EsEvitable] = TRUE () )`).
 - No `SAMEPERIODLASTYEAR` ni equivalentes: el seed no está diseñado para YoY.
 - No `COUNTROWS ( DimEmpleado )` como plantilla (SCD2 + bajas).
-- No reescriba `ContadorSalida`, `DiasLaborales`, `TieneGap`: ya son aditivos del mart.
+- `ContadorSalida`, `ContadorEvento` y `DiasLaborales` sí son numéricos: `SUM` es correcto.
 - Formato: tasas `0.0%`; CRC `₡#,0`; antigüedad y niveles `#,0.0`; conteos `#,0`.
 
 ---
@@ -897,7 +904,7 @@ Las expresiones están en el catálogo §3.2. Créelas de #1 a #42: `#8 Tasa rot
 
 Las medidas se toman **solo** de `_Medidas` (expresión en §3.2; mapa visual en §3.3). Las columnas, de §2.3. Este apartado describe la tesis de cada página, no vuelve a definir DAX.
 
-Filtros de página comunes (salvo Talento): `EsActivo = 1` **solo** en visuals que lean `FactHeadcountMensual`. No lo aplique al informe entero.
+Filtros de página comunes (salvo Talento): `EsActivo` = **TRUE** (no `1`: en Power BI es Boolean) **solo** en visuals que lean `FactHeadcountMensual`. No lo aplique al informe entero.
 
 En páginas ejecutivas **no** ponga `NumeroEmpleado` ni `NombreCompleto`. El detalle nominativo va, si acaso, a *drill-through* con el aviso de PII sintético.
 
@@ -948,7 +955,7 @@ Hallazgos: Comercial por encima, Operaciones por debajo; gap leve de género en 
 - Un visual por cada columna del diccionario. El catálogo alimenta *slicers y leyendas*, no 40 tarjetas.
 - Medidas `CALCULATE` por cada departamento (`[Rotación TI]`, `[Rotación RH]`…). El eje `DimDepartamento` ya lo resuelve.
 - `COUNTROWS(DimEmpleado)` como headcount: la dimensión es SCD2 y tiene inactivos.
-- Tasa de rotación = `Salidas / SUM(EsActivo)` a nivel año (denominador inflado ~×12).
+- Tasa de rotación = `Salidas / COUNTROWS` del snapshot a nivel año (denominador inflado ~×12). Use `[Headcount promedio]`.
 - Mapa de Costa Rica como visual estrella: Bing suele resolver mal cantones; barras por `Provincia` / `Nombre` de sede son más honestas.
 - Donuts encadenados. Uno en ejecutivo (voluntaria/involuntaria) es suficiente.
 - Mezclar `hr.vw_EquidadSalarialPorDepto` con el mart en el mismo modelo “para validar”: valide en SQL (`03_ConsultasValidacion.sql`) y publique solo `dm`.
